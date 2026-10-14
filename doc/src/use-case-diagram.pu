@@ -1,0 +1,134 @@
+@startuml
+left to right direction
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Human Actors
+actor "Base User" as User
+actor "Administrator" as Admin
+actor "Super-Administrator" as SuperAdmin
+
+' System Actors
+actor "Banking API" as BankAPI << System >>
+actor "Email / SMS Gateway" as NotifSystem << System >>
+actor "System Scheduler" as Timer << System >>
+
+Admin --|> User
+SuperAdmin --|> Admin
+
+rectangle "Subscription Management & Invoicing System" {
+
+    ' Authentication & Personalization
+    (Log In to Portal) as UC_Login
+    (Configure Personal Preferences) as UC_Prefs
+    (View Assigned Client Invoices) as UC_ViewInvoices
+    (Add Contextual Comment & @Mention) as UC_Comment
+    (View Financial Dashboard) as UC_Dashboard
+    (Search & Filter Records) as UC_Search
+
+    ' Customer Onboarding & Management
+    (Register Customer Profile) as UC_RegCustomer
+    (Verify Company Email) as UC_VerifyEmail
+    (Check Duplicate Records) as UC_CheckDuplicates
+    (Manage Customer Contacts) as UC_ManageContacts
+    (Assign Customer Tags) as UC_TagCustomer
+    (Attach Supporting Documents) as UC_AttachFiles
+
+    ' Subscription & Pricing Workflows
+    usecase UC_SubSetup as "Setup Subscription Plan
+--
+**extension points**
+commercial exception
+"
+    (Propose Commercial Exception) as UC_PropException
+    (Approve Standard Exception) as UC_ApproveException
+    (Approve High-Threshold Exception) as UC_ApproveHighException
+    (Configure Standard Pricing Structure) as UC_ConfigPricing
+
+    ' Invoicing & Financial Operations
+    (Generate Monthly Recurring Invoices) as UC_GenRecurring
+    (Generate Ad-Hoc Invoice) as UC_GenAdhoc
+    (Manage Test Invoices) as UC_ManageTestInv
+    (Lock Financial Period) as UC_LockPeriod
+    (Adjust Dates for Non-Working Days) as UC_CalendarAdjust
+
+    ' Banking Integration & Reconciliation
+    (Fetch Bank Transactions) as UC_FetchBank
+    (Reconcile Payments) as UC_Reconcile
+    usecase UC_ReviewExceptions as "Review Unmatched Payment
+--
+**extension points**
+ambiguous transaction
+"
+
+    ' Notifications & Account Cancellation
+    (Send Automated Notifications & Reminders) as UC_SendNotif
+    (Configure Notification Triggers) as UC_ConfigNotifRules
+    (Process Account Cancellation) as UC_CancelAccount
+
+    ' System Administration & Security
+    (Delegate Account Permissions) as UC_DelegatePerms
+    (Define Roles & System Permissions) as UC_DefineRoles
+    (Modify Workflows & System Rules) as UC_ModifyWorkflows
+
+    ' --- Base User Associations ---
+    User -- UC_Login
+    User -- UC_Prefs
+    User -- UC_ViewInvoices
+    User -- UC_Comment
+    User -- UC_Dashboard
+    User -- UC_Search
+    User -- UC_PropException
+
+    ' --- Administrator Associations ---
+    Admin -- UC_RegCustomer
+    Admin -- UC_ManageContacts
+    Admin -- UC_TagCustomer
+    Admin -- UC_AttachFiles
+    Admin -- UC_SubSetup
+    Admin -- UC_ApproveException
+    Admin -- UC_GenAdhoc
+    Admin -- UC_ManageTestInv
+    Admin -- UC_LockPeriod
+    Admin -- UC_ReviewExceptions
+    Admin -- UC_ConfigNotifRules
+    Admin -- UC_CancelAccount
+    Admin -- UC_DelegatePerms
+
+    ' --- Super-Administrator Associations ---
+    SuperAdmin -- UC_ApproveHighException
+    SuperAdmin -- UC_ConfigPricing
+    SuperAdmin -- UC_DefineRoles
+    SuperAdmin -- UC_ModifyWorkflows
+
+    ' --- Automated System Actor Associations ---
+    Timer -- UC_GenRecurring
+    Timer -- UC_SendNotif
+    Timer -- UC_Reconcile
+    UC_FetchBank -- BankAPI
+    UC_SendNotif -- NotifSystem
+
+    ' --- Include Relationships ---
+    UC_RegCustomer ..> UC_VerifyEmail : <<include>>
+    UC_RegCustomer ..> UC_CheckDuplicates : <<include>>
+    UC_GenRecurring ..> UC_CalendarAdjust : <<include>>
+    UC_SendNotif ..> UC_CalendarAdjust : <<include>>
+    UC_Reconcile ..> UC_FetchBank : <<include>>
+
+    ' --- Extend Relationships ---
+    UC_SubSetup <.. UC_PropException : <<extend>>\n(commercial exception)
+    UC_Reconcile <.. UC_ReviewExceptions : <<extend>>\n(ambiguous transaction)
+}
+@enduml
