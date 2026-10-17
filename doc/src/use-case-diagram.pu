@@ -42,20 +42,32 @@ rectangle "Subscription Management & Invoicing System" {
     (Register Customer Profile) as UC_RegCustomer
     (Verify Company Email) as UC_VerifyEmail
     (Check Duplicate Records) as UC_CheckDuplicates
-    (Manage Customer Contacts) as UC_ManageContacts
+    usecase UC_ManageContacts as "Manage Customer Contacts
+    --
+    **extension points**
+    erasure request
+    "
     (Assign Customer Tags) as UC_TagCustomer
     (Attach Supporting Documents) as UC_AttachFiles
+    (Anonymize Personal Contact Information) as UC_Anonymize
 
     ' Subscription & Pricing Workflows
-    usecase UC_SubSetup as "Setup Subscription Plan
---
-**extension points**
-commercial exception
-"
+    usecase UC_SubSetup as "Set Up Subscription Plan
+    --
+    **extension points**
+    commercial exception
+    "
+    usecase UC_DetectPriceInc as "Detect Price Inconsistencies
+    --
+    **extension points**
+    inconsistency found
+    "
+    (Review Flagged Prices) as UC_ReviewPrices
     (Propose Commercial Exception) as UC_PropException
     (Approve Standard Exception) as UC_ApproveException
     (Approve High-Threshold Exception) as UC_ApproveHighException
     (Configure Standard Pricing Structure) as UC_ConfigPricing
+    (Activate Pending Subscription) as UC_ActivateSub
 
     ' Invoicing & Financial Operations
     (Generate Monthly Recurring Invoices) as UC_GenRecurring
@@ -63,25 +75,38 @@ commercial exception
     (Manage Test Invoices) as UC_ManageTestInv
     (Lock Financial Period) as UC_LockPeriod
     (Adjust Dates for Non-Working Days) as UC_CalendarAdjust
+    (Issue Invoice) as UC_IssueInvoice
+    (Send Invoice) as UC_SendInvoice
+    (Update Account Standing) as UC_UpdateStanding
+    (Override Locked Period) as UC_OverrideLock
 
     ' Banking Integration & Reconciliation
     (Fetch Bank Transactions) as UC_FetchBank
-    (Reconcile Payments) as UC_Reconcile
-    usecase UC_ReviewExceptions as "Review Unmatched Payment
---
-**extension points**
-ambiguous transaction
-"
+    usecase UC_Reconcile as "Reconcile Payments
+    --
+    **extension points**
+    ambiguous transaction
+    "
+    (Review Unmatched Payment) as UC_ReviewExceptions
 
     ' Notifications & Account Cancellation
     (Send Automated Notifications & Reminders) as UC_SendNotif
     (Configure Notification Triggers) as UC_ConfigNotifRules
     (Process Account Cancellation) as UC_CancelAccount
+    (Request Account Cancellation) as UC_RequestCancel
+    (Freeze Recurring Billing) as UC_FreezeBilling
+    note right of UC_CancelAccount
+        Overdue notifications for historical invoices
+        must persist even after cancellation
+    end note
+    (View Outstanding Obligations) as UC_ViewObligations
 
     ' System Administration & Security
     (Delegate Account Permissions) as UC_DelegatePerms
     (Define Roles & System Permissions) as UC_DefineRoles
     (Modify Workflows & System Rules) as UC_ModifyWorkflows
+    (Record Audit Entry) as UC_RecordAuditEntry
+    (Preserve Historical Invoice Records) as UC_PreserveRecords
 
     ' --- Base User Associations ---
     User -- UC_Login
@@ -91,6 +116,7 @@ ambiguous transaction
     User -- UC_Dashboard
     User -- UC_Search
     User -- UC_PropException
+    User -- UC_RequestCancel
 
     ' --- Administrator Associations ---
     Admin -- UC_RegCustomer
@@ -106,17 +132,24 @@ ambiguous transaction
     Admin -- UC_ConfigNotifRules
     Admin -- UC_CancelAccount
     Admin -- UC_DelegatePerms
+    Admin -- UC_IssueInvoice
+    Admin -- UC_SendInvoice
+    Admin -- UC_Anonymize
+    Admin -- UC_ReviewPrices
 
     ' --- Super-Administrator Associations ---
     SuperAdmin -- UC_ApproveHighException
     SuperAdmin -- UC_ConfigPricing
     SuperAdmin -- UC_DefineRoles
     SuperAdmin -- UC_ModifyWorkflows
-
+    SuperAdmin -- UC_OverrideLock
     ' --- Automated System Actor Associations ---
     Timer -- UC_GenRecurring
     Timer -- UC_SendNotif
     Timer -- UC_Reconcile
+    Timer -- UC_UpdateStanding
+    Timer -- UC_ActivateSub
+    Timer -- UC_DetectPriceInc
     UC_FetchBank -- BankAPI
     UC_SendNotif -- NotifSystem
 
@@ -126,9 +159,28 @@ ambiguous transaction
     UC_GenRecurring ..> UC_CalendarAdjust : <<include>>
     UC_SendNotif ..> UC_CalendarAdjust : <<include>>
     UC_Reconcile ..> UC_FetchBank : <<include>>
+    UC_Reconcile ..> UC_UpdateStanding : <<include>>
+    UC_SendInvoice ..> UC_SendNotif : <<include>>
+    UC_ManageTestInv ..> UC_RecordAuditEntry : <<include>>
+    UC_ConfigPricing ..> UC_RecordAuditEntry : <<include>>
+    UC_ApproveException ..> UC_RecordAuditEntry : <<include>>
+    UC_ApproveHighException ..> UC_RecordAuditEntry : <<include>>
+    UC_OverrideLock ..> UC_RecordAuditEntry : <<include>>
+    UC_RequestCancel ..> UC_SendNotif : <<include>>
+    UC_CancelAccount ..> UC_FreezeBilling : <<include>>
+    UC_CancelAccount ..> UC_ViewObligations : <<include>>
+    UC_CancelAccount ..> UC_PreserveRecords : <<include>>
+    UC_Anonymize ..> UC_PreserveRecords : <<include>>
+    UC_Anonymize ..> UC_RecordAuditEntry : <<include>>
+
 
     ' --- Extend Relationships ---
     UC_SubSetup <.. UC_PropException : <<extend>>\n(commercial exception)
     UC_Reconcile <.. UC_ReviewExceptions : <<extend>>\n(ambiguous transaction)
+    UC_DetectPriceInc <.. UC_ReviewPrices : <<extend>>\n (inconsistency found)
+    UC_GenAdhoc <.. UC_OverrideLock : <<extend>>\n (period locked)
+    UC_ManageTestInv <.. UC_OverrideLock : <<extend>>\n (period locked)
+    UC_ManageContacts <.. UC_Anonymize : <<extend>>\n(erasure request)
+    
 }
 @enduml
