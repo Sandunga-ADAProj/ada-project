@@ -1,20 +1,37 @@
 @startuml
 left to right direction
 
+' Global settings
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+' Use Case styling
 skinparam usecase {
     BackgroundColor #FFFFFF
     BorderColor #2B3E6A
     FontColor #000000
 }
+
+' Actor styling
 skinparam actor {
     BackgroundColor #FFFFFF
     BorderColor #2B3E6A
     FontColor #000000
 }
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
 skinparam arrow {
     Color #2B3E6A
 }
 
+'=== Actors ===
 ' Human Actors
 actor "Base User" as User
 actor "Administrator" as Admin
@@ -25,162 +42,165 @@ actor "Banking API" as BankAPI << System >>
 actor "Email / SMS Gateway" as NotifSystem << System >>
 actor "System Scheduler" as Timer << System >>
 
-Admin --|> User
-SuperAdmin --|> Admin
 
+'=== System Boundary ===
 rectangle "Subscription Management & Invoicing System" {
 
+    '=== Use Cases ===
     ' Authentication & Personalization
-    (Log In to Portal) as UC_Login
-    (Configure Personal Preferences) as UC_Prefs
-    (View Assigned Client Invoices) as UC_ViewInvoices
-    (Add Contextual Comment & @Mention) as UC_Comment
-    (View Financial Dashboard) as UC_Dashboard
-    (Search & Filter Records) as UC_Search
+    usecase "Log In to Portal" as UC_Login
+    usecase "Configure Personal Preferences" as UC_Prefs
+    usecase "View Assigned Client Invoices" as UC_ViewInvoices
+    usecase "Add Contextual Comment & @Mention" as UC_Comment
+    usecase "View Financial Dashboard" as UC_Dashboard
+    usecase "Search & Filter Records" as UC_Search
 
     ' Customer Onboarding & Management
-    (Register Customer Profile) as UC_RegCustomer
-    (Verify Company Email) as UC_VerifyEmail
-    (Check Duplicate Records) as UC_CheckDuplicates
+    usecase "Register Customer Profile" as UC_RegCustomer
+    usecase "Verify Company Email" as UC_VerifyEmail
+    usecase "Check Duplicate Records" as UC_CheckDuplicates
     usecase UC_ManageContacts as "Manage Customer Contacts
     --
     **extension points**
-    erasure request
-    "
-    (Assign Customer Tags) as UC_TagCustomer
-    (Attach Supporting Documents) as UC_AttachFiles
-    (Anonymize Personal Contact Information) as UC_Anonymize
+    erasure request"
+    usecase "Assign Customer Tags" as UC_TagCustomer
+    usecase "Attach Supporting Documents" as UC_AttachFiles
+    usecase "Anonymize Personal Contact Information" as UC_Anonymize
 
     ' Subscription & Pricing Workflows
     usecase UC_SubSetup as "Set Up Subscription Plan
     --
     **extension points**
-    commercial exception
-    "
+    commercial exception"
     usecase UC_DetectPriceInc as "Detect Price Inconsistencies
     --
     **extension points**
-    inconsistency found
-    "
-    (Review Flagged Prices) as UC_ReviewPrices
-    (Propose Commercial Exception) as UC_PropException
-    (Approve Standard Exception) as UC_ApproveException
-    (Approve High-Threshold Exception) as UC_ApproveHighException
-    (Configure Standard Pricing Structure) as UC_ConfigPricing
-    (Activate Pending Subscription) as UC_ActivateSub
+    inconsistency found"
+    usecase "Review Flagged Prices" as UC_ReviewPrices
+    usecase "Propose Commercial Exception" as UC_PropException
+    usecase "Approve Standard Exception" as UC_ApproveException
+    usecase "Approve High-Threshold Exception" as UC_ApproveHighException
+    usecase "Configure Standard Pricing Structure" as UC_ConfigPricing
+    usecase "Activate Pending Subscription" as UC_ActivateSub
 
     ' Invoicing & Financial Operations
-    (Generate Monthly Recurring Invoices) as UC_GenRecurring
-    (Generate Ad-Hoc Invoice) as UC_GenAdhoc
-    (Manage Test Invoices) as UC_ManageTestInv
-    (Lock Financial Period) as UC_LockPeriod
-    (Adjust Dates for Non-Working Days) as UC_CalendarAdjust
-    (Issue Invoice) as UC_IssueInvoice
-    (Send Invoice) as UC_SendInvoice
-    (Update Account Standing) as UC_UpdateStanding
-    (Override Locked Period) as UC_OverrideLock
+    usecase "Generate Monthly Recurring Invoices" as UC_GenRecurring
+    usecase "Generate Ad-Hoc Invoice" as UC_GenAdhoc
+    usecase "Manage Test Invoices" as UC_ManageTestInv
+    usecase "Lock Financial Period" as UC_LockPeriod
+    usecase "Adjust Dates for Non-Working Days" as UC_CalendarAdjust
+    usecase "Issue Invoice" as UC_IssueInvoice
+    usecase "Send Invoice" as UC_SendInvoice
+    usecase "Update Account Standing" as UC_UpdateStanding
+    usecase "Override Locked Period" as UC_OverrideLock
 
     ' Banking Integration & Reconciliation
-    (Fetch Bank Transactions) as UC_FetchBank
+    usecase "Fetch Bank Transactions" as UC_FetchBank
     usecase UC_Reconcile as "Reconcile Payments
     --
     **extension points**
-    ambiguous transaction
-    "
-    (Review Unmatched Payment) as UC_ReviewExceptions
+    ambiguous transaction"
+    usecase "Review Unmatched Payment" as UC_ReviewExceptions
 
     ' Notifications & Account Cancellation
-    (Send Automated Notifications & Reminders) as UC_SendNotif
-    (Configure Notification Triggers) as UC_ConfigNotifRules
-    (Process Account Cancellation) as UC_CancelAccount
-    (Request Account Cancellation) as UC_RequestCancel
-    (Freeze Recurring Billing) as UC_FreezeBilling
+    usecase "Send Automated Notifications & Reminders" as UC_SendNotif
+    usecase "Configure Notification Triggers" as UC_ConfigNotifRules
+    usecase "Process Account Cancellation" as UC_CancelAccount
+    usecase "Request Account Cancellation" as UC_RequestCancel
+    usecase "Freeze Recurring Billing" as UC_FreezeBilling
+    usecase "View Outstanding Obligations" as UC_ViewObligations
+
     note right of UC_CancelAccount
         Overdue notifications for historical invoices
         must persist even after cancellation
     end note
-    (View Outstanding Obligations) as UC_ViewObligations
 
     ' System Administration & Security
-    (Delegate Account Permissions) as UC_DelegatePerms
-    (Define Roles & System Permissions) as UC_DefineRoles
-    (Modify Workflows & System Rules) as UC_ModifyWorkflows
-    (Record Audit Entry) as UC_RecordAuditEntry
-    (Preserve Historical Invoice Records) as UC_PreserveRecords
+    usecase "Delegate Account Permissions" as UC_DelegatePerms
+    usecase "Define Roles & System Permissions" as UC_DefineRoles
+    usecase "Modify Workflows & System Rules" as UC_ModifyWorkflows
+    usecase "Record Audit Entry" as UC_RecordAuditEntry
+    usecase "Preserve Historical Invoice Records" as UC_PreserveRecords
 
-    ' --- Base User Associations ---
-    User -- UC_Login
-    User -- UC_Prefs
-    User -- UC_ViewInvoices
-    User -- UC_Comment
-    User -- UC_Dashboard
-    User -- UC_Search
-    User -- UC_PropException
-    User -- UC_RequestCancel
-
-    ' --- Administrator Associations ---
-    Admin -- UC_RegCustomer
-    Admin -- UC_ManageContacts
-    Admin -- UC_TagCustomer
-    Admin -- UC_AttachFiles
-    Admin -- UC_SubSetup
-    Admin -- UC_ApproveException
-    Admin -- UC_GenAdhoc
-    Admin -- UC_ManageTestInv
-    Admin -- UC_LockPeriod
-    Admin -- UC_ReviewExceptions
-    Admin -- UC_ConfigNotifRules
-    Admin -- UC_CancelAccount
-    Admin -- UC_DelegatePerms
-    Admin -- UC_IssueInvoice
-    Admin -- UC_SendInvoice
-    Admin -- UC_Anonymize
-    Admin -- UC_ReviewPrices
-
-    ' --- Super-Administrator Associations ---
-    SuperAdmin -- UC_ApproveHighException
-    SuperAdmin -- UC_ConfigPricing
-    SuperAdmin -- UC_DefineRoles
-    SuperAdmin -- UC_ModifyWorkflows
-    SuperAdmin -- UC_OverrideLock
-    ' --- Automated System Actor Associations ---
-    Timer -- UC_GenRecurring
-    Timer -- UC_SendNotif
-    Timer -- UC_Reconcile
-    Timer -- UC_UpdateStanding
-    Timer -- UC_ActivateSub
-    Timer -- UC_DetectPriceInc
-    UC_FetchBank -- BankAPI
-    UC_SendNotif -- NotifSystem
-
-    ' --- Include Relationships ---
-    UC_RegCustomer ..> UC_VerifyEmail : <<include>>
-    UC_RegCustomer ..> UC_CheckDuplicates : <<include>>
-    UC_GenRecurring ..> UC_CalendarAdjust : <<include>>
-    UC_SendNotif ..> UC_CalendarAdjust : <<include>>
-    UC_Reconcile ..> UC_FetchBank : <<include>>
-    UC_Reconcile ..> UC_UpdateStanding : <<include>>
-    UC_SendInvoice ..> UC_SendNotif : <<include>>
-    UC_ManageTestInv ..> UC_RecordAuditEntry : <<include>>
-    UC_ConfigPricing ..> UC_RecordAuditEntry : <<include>>
-    UC_ApproveException ..> UC_RecordAuditEntry : <<include>>
-    UC_ApproveHighException ..> UC_RecordAuditEntry : <<include>>
-    UC_OverrideLock ..> UC_RecordAuditEntry : <<include>>
-    UC_RequestCancel ..> UC_SendNotif : <<include>>
-    UC_CancelAccount ..> UC_FreezeBilling : <<include>>
-    UC_CancelAccount ..> UC_ViewObligations : <<include>>
-    UC_CancelAccount ..> UC_PreserveRecords : <<include>>
-    UC_Anonymize ..> UC_PreserveRecords : <<include>>
-    UC_Anonymize ..> UC_RecordAuditEntry : <<include>>
-
-
-    ' --- Extend Relationships ---
-    UC_SubSetup <.. UC_PropException : <<extend>>\n(commercial exception)
-    UC_Reconcile <.. UC_ReviewExceptions : <<extend>>\n(ambiguous transaction)
-    UC_DetectPriceInc <.. UC_ReviewPrices : <<extend>>\n (inconsistency found)
-    UC_GenAdhoc <.. UC_OverrideLock : <<extend>>\n (period locked)
-    UC_ManageTestInv <.. UC_OverrideLock : <<extend>>\n (period locked)
-    UC_ManageContacts <.. UC_Anonymize : <<extend>>\n(erasure request)
-    
 }
+
+'=== Relationships ===
+' Actor Generalizations
+Admin --|> User
+SuperAdmin --|> Admin
+
+' Base User Associations
+User -- UC_Login
+User -- UC_Prefs
+User -- UC_ViewInvoices
+User -- UC_Comment
+User -- UC_Dashboard
+User -- UC_Search
+User -- UC_PropException
+User -- UC_RequestCancel
+
+' Administrator Associations
+Admin -- UC_RegCustomer
+Admin -- UC_ManageContacts
+Admin -- UC_TagCustomer
+Admin -- UC_AttachFiles
+Admin -- UC_SubSetup
+Admin -- UC_ApproveException
+Admin -- UC_GenAdhoc
+Admin -- UC_ManageTestInv
+Admin -- UC_LockPeriod
+Admin -- UC_ReviewExceptions
+Admin -- UC_ConfigNotifRules
+Admin -- UC_CancelAccount
+Admin -- UC_DelegatePerms
+Admin -- UC_IssueInvoice
+Admin -- UC_SendInvoice
+Admin -- UC_Anonymize
+Admin -- UC_ReviewPrices
+
+' Super-Administrator Associations
+SuperAdmin -- UC_ApproveHighException
+SuperAdmin -- UC_ConfigPricing
+SuperAdmin -- UC_DefineRoles
+SuperAdmin -- UC_ModifyWorkflows
+SuperAdmin -- UC_OverrideLock
+
+' Automated System Actor Associations
+Timer -- UC_GenRecurring
+Timer -- UC_SendNotif
+Timer -- UC_Reconcile
+Timer -- UC_UpdateStanding
+Timer -- UC_ActivateSub
+Timer -- UC_DetectPriceInc
+UC_FetchBank -- BankAPI
+UC_SendNotif -- NotifSystem
+
+' Include Relationships
+UC_RegCustomer ..> UC_VerifyEmail : <<include>>
+UC_RegCustomer ..> UC_CheckDuplicates : <<include>>
+UC_GenRecurring ..> UC_CalendarAdjust : <<include>>
+UC_SendNotif ..> UC_CalendarAdjust : <<include>>
+UC_Reconcile ..> UC_FetchBank : <<include>>
+UC_Reconcile ..> UC_UpdateStanding : <<include>>
+UC_SendInvoice ..> UC_SendNotif : <<include>>
+UC_ManageTestInv ..> UC_RecordAuditEntry : <<include>>
+UC_ConfigPricing ..> UC_RecordAuditEntry : <<include>>
+UC_ApproveException ..> UC_RecordAuditEntry : <<include>>
+UC_ApproveHighException ..> UC_RecordAuditEntry : <<include>>
+UC_OverrideLock ..> UC_RecordAuditEntry : <<include>>
+UC_RequestCancel ..> UC_SendNotif : <<include>>
+UC_CancelAccount ..> UC_FreezeBilling : <<include>>
+UC_CancelAccount ..> UC_ViewObligations : <<include>>
+UC_CancelAccount ..> UC_PreserveRecords : <<include>>
+UC_Anonymize ..> UC_PreserveRecords : <<include>>
+UC_Anonymize ..> UC_RecordAuditEntry : <<include>>
+
+' Extend Relationships
+UC_SubSetup <.. UC_PropException : <<extend>>\n(commercial exception)
+UC_Reconcile <.. UC_ReviewExceptions : <<extend>>\n(ambiguous transaction)
+UC_DetectPriceInc <.. UC_ReviewPrices : <<extend>>\n(inconsistency found)
+UC_GenAdhoc <.. UC_OverrideLock : <<extend>>\n(period locked)
+UC_ManageTestInv <.. UC_OverrideLock : <<extend>>\n(period locked)
+UC_ManageContacts <.. UC_Anonymize : <<extend>>\n(erasure request)
+
 @enduml
