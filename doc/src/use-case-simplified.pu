@@ -1,0 +1,165 @@
+@startuml
+left to right direction
+
+' Global settings
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+' Use Case styling
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Actor styling
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+'=== Actors ===
+' Human Actors
+actor "Base User" as User
+actor "Administrator" as Admin
+actor "Super-Administrator" as SuperAdmin
+
+' System Actors
+actor "Banking API" as BankAPI << System >>
+actor "Email / SMS Gateway" as NotifSystem << System >>
+actor "System Scheduler" as Timer << System >>
+
+
+'=== System Boundary ===
+rectangle "Subscription Management & Invoicing System" {
+
+    '=== Use Cases ===
+    ' 1. Portal Access & Navigation (UC01 - UC04)
+    usecase "Log In to Portal" as UC01
+    usecase "Configure Personal Preferences" as UC02
+    usecase "View Dashboard & Search Records" as UC03
+    usecase "View Invoices & Add Comments" as UC04
+
+    ' 2. Customer Onboarding & CRM (UC05 - UC07)
+    usecase "Register Customer Profile" as UC05
+    usecase UC06 as "Manage Customer Contacts
+    --
+    **extension points**
+    erasure request"
+    usecase "Anonymize Contact Data" as UC07
+
+    ' 3. Subscriptions & Pricing (UC08 - UC12)
+    usecase UC08 as "Set Up Subscription Plan
+    --
+    **extension points**
+    commercial exception"
+    usecase "Propose Commercial Exception" as UC09
+    usecase "Approve Commercial Exception" as UC10
+    usecase "Configure Standard Pricing & Targets" as UC11
+    usecase "Review Flagged Prices & Annual Tiers" as UC12
+
+    ' 4. Invoicing & Accounting Operations (UC13 - UC19)
+    usecase "Generate Recurring Invoices" as UC13
+    usecase "Manage Ad-Hoc & Test Invoices" as UC14
+    usecase "Issue & Send Invoice" as UC15
+    usecase "Lock Financial Period" as UC16
+    usecase "Override Locked Period" as UC17
+    usecase "Export Accounting Package" as UC18
+    usecase "Adjust Dates for Non-Working Days" as UC19
+
+    ' 5. Banking & Reconciliation (UC20 - UC22)
+    usecase UC20 as "Reconcile Bank Payments
+    --
+    **extension points**
+    ambiguous transaction"
+    usecase "Fetch Bank Transactions" as UC21
+    usecase "Review Unmatched Payment" as UC22
+
+    ' 6. Notifications & Cancellation (UC23 - UC26)
+    usecase "Send Automated Notifications" as UC23
+    usecase "Configure Notification Triggers" as UC24
+    usecase "Request Account Cancellation" as UC25
+    usecase "Process Account Cancellation" as UC26
+
+    note right of UC26
+        Freezes recurring billing (FR-5.1) while
+        persisting overdue reminders and historical
+        invoice records (FR-5.2, FR-5.4)
+    end note
+
+    ' 7. Access & System Administration (UC27 - UC28)
+    usecase "Delegate Permissions & Guest Access" as UC27
+    usecase "Manage Roles & System Rules" as UC28
+
+}
+
+'=== Relationships ===
+' Actor Generalizations
+Admin --|> User
+SuperAdmin --|> Admin
+
+' Base User Associations
+User -- UC01
+User -- UC02
+User -- UC03
+User -- UC04
+User -- UC09
+User -- UC25
+
+' Administrator Associations
+Admin -- UC05
+Admin -- UC06
+Admin -- UC07
+Admin -- UC08
+Admin -- UC10
+Admin -- UC12
+Admin -- UC14
+Admin -- UC15
+Admin -- UC16
+Admin -- UC18
+Admin -- UC22
+Admin -- UC24
+Admin -- UC26
+Admin -- UC27
+
+' Super-Administrator Associations
+SuperAdmin -- UC10
+SuperAdmin -- UC11
+SuperAdmin -- UC17
+SuperAdmin -- UC28
+
+' Automated System Actor Associations
+Timer -- UC12
+Timer -- UC13
+Timer -- UC20
+Timer -- UC23
+UC21 -- BankAPI
+UC23 -- NotifSystem
+
+' Include Relationships (Shared Subfunctions & External Calls)
+UC13 ..> UC19 : <<include>>
+UC23 ..> UC19 : <<include>>
+UC15 ..> UC23 : <<include>>
+UC25 ..> UC23 : <<include>>
+UC20 ..> UC21 : <<include>>
+
+' Extend Relationships (Conditional Workflows)
+UC06 <.. UC07 : <<extend>>\n(erasure request)
+UC08 <.. UC09 : <<extend>>\n(commercial exception)
+UC14 <.. UC17 : <<extend>>\n(period locked)
+UC20 <.. UC22 : <<extend>>\n(ambiguous transaction)
+
+@enduml
