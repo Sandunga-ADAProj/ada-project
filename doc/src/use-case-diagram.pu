@@ -47,80 +47,62 @@ actor "System Scheduler" as Timer << System >>
 rectangle "Subscription Management & Invoicing System" {
 
     '=== Use Cases ===
-    ' Authentication & Personalization
+    ' 1. Portal Access & Navigation (UC01 - UC04)
     usecase "Log In to Portal" as UC01
     usecase "Configure Personal Preferences" as UC02
-    usecase "View Assigned Client Invoices" as UC03
-    usecase "Add Contextual Comment & @Mention" as UC04
-    usecase "View Financial Dashboard" as UC05
-    usecase "Search & Filter Records" as UC06
+    usecase "View Dashboard & Search Records" as UC03
+    usecase "View Invoices & Add Comments" as UC04
 
-    ' Customer Onboarding & Management
-    usecase "Register Customer Profile" as UC07
-    usecase "Verify Company Email" as UC08
-    usecase "Check Duplicate Records" as UC09
-    usecase UC10 as "Manage Customer Contacts
+    ' 2. Customer Onboarding & CRM (UC05 - UC07)
+    usecase "Register Customer Profile" as UC05
+    usecase UC06 as "Manage Customer Contacts
     --
     **extension points**
     erasure request"
-    usecase "Assign Customer Tags" as UC11
-    usecase "Attach Supporting Documents" as UC12
-    usecase "Anonymize Personal Contact Information" as UC13
+    usecase "Anonymize Contact Data" as UC07
 
-    ' Subscription & Pricing Workflows
-    usecase UC14 as "Set Up Subscription Plan
+    ' 3. Subscriptions & Pricing (UC08 - UC12)
+    usecase UC08 as "Set Up Subscription Plan
     --
     **extension points**
     commercial exception"
-    usecase UC15 as "Detect Price Inconsistencies
-    --
-    **extension points**
-    inconsistency found"
-    usecase "Review Flagged Prices" as UC16
-    usecase "Propose Commercial Exception" as UC17
-    usecase "Approve Standard Exception" as UC18
-    usecase "Approve High-Threshold Exception" as UC19
-    usecase "Configure Standard Pricing Structure" as UC20
-    usecase "Activate Pending Subscription" as UC21
+    usecase "Propose Commercial Exception" as UC09
+    usecase "Approve Commercial Exception" as UC10
+    usecase "Configure Standard Pricing & Targets" as UC11
+    usecase "Review Flagged Prices & Annual Tiers" as UC12
 
-    ' Invoicing & Financial Operations
-    usecase "Generate Monthly Recurring Invoices" as UC22
-    usecase "Generate Ad-Hoc Invoice" as UC23
-    usecase "Manage Test Invoices" as UC24
-    usecase "Lock Financial Period" as UC25
-    usecase "Adjust Dates for Non-Working Days" as UC26
-    usecase "Issue Invoice" as UC27
-    usecase "Send Invoice" as UC28
-    usecase "Update Account Standing" as UC29
-    usecase "Override Locked Period" as UC30
+    ' 4. Invoicing & Accounting Operations (UC13 - UC19)
+    usecase "Generate Recurring Invoices" as UC13
+    usecase "Manage Ad-Hoc & Test Invoices" as UC14
+    usecase "Issue & Send Invoice" as UC15
+    usecase "Lock Financial Period" as UC16
+    usecase "Override Locked Period" as UC17
+    usecase "Export Accounting Package" as UC18
+    usecase "Adjust Dates for Non-Working Days" as UC19
 
-    ' Banking Integration & Reconciliation
-    usecase "Fetch Bank Transactions" as UC31
-    usecase UC32 as "Reconcile Payments
+    ' 5. Banking & Reconciliation (UC20 - UC22)
+    usecase UC20 as "Reconcile Bank Payments
     --
     **extension points**
     ambiguous transaction"
-    usecase "Review Unmatched Payment" as UC33
+    usecase "Fetch Bank Transactions" as UC21
+    usecase "Review Unmatched Payment" as UC22
 
-    ' Notifications & Account Cancellation
-    usecase "Send Automated Notifications & Reminders" as UC34
-    usecase "Configure Notification Triggers" as UC35
-    usecase "Process Account Cancellation" as UC36
-    usecase "Request Account Cancellation" as UC37
-    usecase "Freeze Recurring Billing" as UC38
-    usecase "View Outstanding Obligations" as UC39
+    ' 6. Notifications & Cancellation (UC23 - UC26)
+    usecase "Send Automated Notifications" as UC23
+    usecase "Configure Notification Triggers" as UC24
+    usecase "Request Account Cancellation" as UC25
+    usecase "Process Account Cancellation" as UC26
 
-    note right of UC36
-        Overdue notifications for historical invoices
-        must persist even after cancellation
+    note right of UC26
+        Freezes recurring billing (FR-5.1) while
+        persisting overdue reminders and historical
+        invoice records (FR-5.2, FR-5.4)
     end note
 
-    ' System Administration & Security
-    usecase "Delegate Account Permissions" as UC40
-    usecase "Define Roles & System Permissions" as UC41
-    usecase "Modify Workflows & System Rules" as UC42
-    usecase "Record Audit Entry" as UC43
-    usecase "Preserve Historical Invoice Records" as UC44
+    ' 7. Access & System Administration (UC27 - UC28)
+    usecase "Delegate Permissions & Guest Access" as UC27
+    usecase "Manage Roles & System Rules" as UC28
 
 }
 
@@ -129,78 +111,54 @@ rectangle "Subscription Management & Invoicing System" {
 Admin --|> User
 SuperAdmin --|> Admin
 
-' Base User Associations (UC01-UC06, UC17, UC37)
+' Base User Associations
 User -- UC01
 User -- UC02
 User -- UC03
 User -- UC04
-User -- UC05
-User -- UC06
-User -- UC17
-User -- UC37
+User -- UC09
+User -- UC25
 
-' Administrator Associations (UC07, UC10-UC14, UC16, UC18, UC23-UC25, UC27-UC28, UC33, UC35-UC36, UC40)
+' Administrator Associations
+Admin -- UC05
+Admin -- UC06
 Admin -- UC07
+Admin -- UC08
 Admin -- UC10
-Admin -- UC11
 Admin -- UC12
-Admin -- UC13
 Admin -- UC14
+Admin -- UC15
 Admin -- UC16
 Admin -- UC18
-Admin -- UC23
+Admin -- UC22
 Admin -- UC24
-Admin -- UC25
+Admin -- UC26
 Admin -- UC27
-Admin -- UC28
-Admin -- UC33
-Admin -- UC35
-Admin -- UC36
-Admin -- UC40
 
-' Super-Administrator Associations (UC19-UC20, UC30, UC41-UC42)
-SuperAdmin -- UC19
-SuperAdmin -- UC20
-SuperAdmin -- UC30
-SuperAdmin -- UC41
-SuperAdmin -- UC42
+' Super-Administrator Associations
+SuperAdmin -- UC11
+SuperAdmin -- UC17
+SuperAdmin -- UC28
 
 ' Automated System Actor Associations
-Timer -- UC15
-Timer -- UC21
-Timer -- UC22
-Timer -- UC29
-Timer -- UC32
-Timer -- UC34
-UC31 -- BankAPI
-UC34 -- NotifSystem
+Timer -- UC12
+Timer -- UC13
+Timer -- UC20
+Timer -- UC23
+UC21 -- BankAPI
+UC23 -- NotifSystem
 
-' Include Relationships
-UC07 ..> UC08 : <<include>>
-UC07 ..> UC09 : <<include>>
-UC22 ..> UC26 : <<include>>
-UC34 ..> UC26 : <<include>>
-UC32 ..> UC31 : <<include>>
-UC32 ..> UC29 : <<include>>
-UC28 ..> UC34 : <<include>>
-UC24 ..> UC43 : <<include>>
-UC20 ..> UC43 : <<include>>
-UC18 ..> UC43 : <<include>>
-UC19 ..> UC43 : <<include>>
-UC30 ..> UC43 : <<include>>
-UC37 ..> UC34 : <<include>>
-UC36 ..> UC38 : <<include>>
-UC36 ..> UC39 : <<include>>
-UC36 ..> UC44 : <<include>>
-UC13 ..> UC44 : <<include>>
-UC13 ..> UC43 : <<include>>
+' Include Relationships (Shared Subfunctions & External Calls)
+UC13 ..> UC19 : <<include>>
+UC23 ..> UC19 : <<include>>
+UC15 ..> UC23 : <<include>>
+UC25 ..> UC23 : <<include>>
+UC20 ..> UC21 : <<include>>
 
-' Extend Relationships
-UC14 <.. UC17 : <<extend>>\n(commercial exception)
-UC32 <.. UC33 : <<extend>>\n(ambiguous transaction)
-UC15 <.. UC16 : <<extend>>\n(inconsistency found)
-UC23 <.. UC30 : <<extend>>\n(period locked)
-UC24 <.. UC30 : <<extend>>\n(period locked)
-UC10 <.. UC13 : <<extend>>\n(erasure request)
+' Extend Relationships (Conditional Workflows)
+UC06 <.. UC07 : <<extend>>\n(erasure request)
+UC08 <.. UC09 : <<extend>>\n(commercial exception)
+UC14 <.. UC17 : <<extend>>\n(period locked)
+UC20 <.. UC22 : <<extend>>\n(ambiguous transaction)
 
 @enduml
