@@ -12,26 +12,25 @@
   * *Auditor:* Requires that issued invoices can never be edited or deleted.
 * **Preconditions:** The Administrator is authenticated (UC-01); the customer exists.
 * **Postconditions:** The invoice exists in "draft" or "ready to issue" state, or the draft has been deleted.
-* **Success Guarantee:** The ad-hoc/test invoice is stored with autofilled customer data, correct taxes and attachments, and every creation, edit or deletion is recorded in the audit log (FR-2.3.2).
+* **Success Guarantee:** The ad-hoc/test invoice is stored with autofilled customer data, correct taxes and attachments, and edits or deletions of unissued test invoices are recorded in the audit log (FR-2.3.2). 
 * **Minimal Guarantee:** Issued invoices are never edited or deleted; no invoice is created, edited or deleted in a locked period without an audited override (FR-2.7); reloading the page never duplicates an invoice (NFR-1.5).
 * **Trigger:** The Administrator selects "New invoice" or opens a draft invoice.
 * **Main Success Scenario:**
-1. **Administrator:** Requests to create an ad-hoc invoice for a customer.
+1. **Administrator:** Enters the invoice details and optionally attaches supporting documents (FR-2.2.3).
 2. **System:** Displays the invoice form with customer and billing data autofilled (FR-2.2.1).
 3. **Administrator:** Adds line items, quantities and prices, optionally attaches documents (FR-2.2.3), and indicates whether it is a test invoice.
 4. **System:** Calculates taxes and totals with exact precision (FR-2.2.2, NFR-2.5) and auto-saves the draft (NFR-1.5).
 5. **System:** Checks that the invoice date belongs to an open financial period.
 6. **Administrator:** Saves the invoice.
-7. **System:** Stores it as "draft" (test) or "ready to issue" (ad-hoc), and logs the action in the audit trail.
+7. **System:** Stores the invoice as a draft until it is ready to be issued, and logs the action in the audit trail.
 
 * **Extensions:**
   * 1a. Administrator edits an existing draft/test invoice:
     * 1a1. System loads the draft; the flow continues at step 3.
   * 1b. Administrator deletes a draft/test invoice:
-    * 1b1. System asks for confirmation.
-    * 1b2. System deletes the draft and logs the deletion (FR-2.3.2). The use case ends.
+    * 1b1. System deletes the draft and logs the deletion (FR-2.3.2). The use case ends.
   * 1c. Administrator tries to edit or delete an issued invoice:
-    * 1c1. System blocks the action and indicates that issued invoices can only be corrected through a new invoice (Assumption: corrective invoice).
+    * 1c1. System blocks editing or deletion of the issued invoice
   * 3a. Dangerous attachment detected:
     * 3a1. System rejects the file and shows an error (NFR-5.5).
   * 5a. Period locked (extension point *period locked*):
