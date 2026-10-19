@@ -12,8 +12,8 @@
   * *Customer company:* Wants to be billed according to the agreed conditions and start date.
 * **Preconditions:** The Administrator is authenticated (UC-01); the customer exists (UC-05); standard pricing is configured (UC-11).
 * **Postconditions:** The customer has a subscription in "Active" or "Pending Activation" state, linked to a plan.
-* **Success Guarantee:** The subscription is stored with plan, price, billing anchor date, payment terms and start date; if the start date is in the future, the customer stays in "Pending Activation" and no invoices or reminders are generated until then (FR-2.1.2); price changes are recorded in the pricing audit trail (FR-2.6.4).
-* **Minimal Guarantee:** Recurring billing is never activated for a customer without sufficient tax information (NFR-2.8 – Blocked Actions); no partially configured subscription is persisted.
+* **Success Guarantee:** The subscription is stored with plan, price, billing anchor date, payment terms and start date; if the start date is in the future, the customer stays in "Pending Activation" and no invoices or reminders are generated until then (FR-2.1.2); pricing data is stored, and any modification to an existing price is recorded in the pricing audit trail (FR-2.6.4).
+* **Minimal Guarantee:** Recurring billing is never activated for a customer without sufficient tax information (Blocked Actions requirement).
 * **Trigger:** The Administrator selects "Set up subscription" for a customer (e.g., at the end of UC-05).
 * **Main Success Scenario:**
 1. **Administrator:** Requests to set up a subscription for a customer.
@@ -22,11 +22,11 @@
 4. **System:** Validates the data and checks that the customer has the tax information required for invoicing.
 5. **System:** Shows a summary of the subscription and the expected first invoice date.
 6. **Administrator:** Confirms the subscription.
-7. **System:** Stores the subscription with status "Active" (start date reached) or "Pending Activation" (future start date) (FR-2.1.2), logs the pricing data (FR-2.6.4) and records the event in the customer timeline.
+7. **System:** Stores the subscription with status "Active" (start date reached) or "Pending Activation" (future start date) (FR-2.1.2), logs the pricing data (FR-2.6.4) and records the event in the customer timeline (FR-6.7.2).
 
 * **Extensions:**
   * 4a. Customer lacks sufficient tax information:
-    * 4a1. System blocks activation and explicitly warns which data are missing (NFR-2.8 – Blocked Actions).
+    * 4a1. System blocks activation and explicitly warns which data are missing (Blocked Actions requirement).
     * 4a2. System alerts administrators about missing customer information (FR-4.2.2). The use case ends or the Administrator completes the data (UC-05) and restarts.
   * 4b. Price outside the configured range:
     * 4b1. System flags the price as "Pending Review" (FR-2.6.1); it will be handled in UC-12.
