@@ -33,7 +33,9 @@
   * 3c. Create temporary guest account:
     * 3c1. Administrator enters guest email, minimum-privilege profile and expiry date.
     * 3c2. System creates the account and sends the invitation (UC-23); it expires automatically (FR-7.4).
+    * 3c3. If the invitation cannot be delivered: System keeps the account created, queues the invitation for retry and alerts the Administrator (FR-4.2.2).
   * 3d. Revoke access / deactivate user:
-    * 3d1. System immediately terminates the user's active sessions (FR-7.5.2).
+    * 3d1. Administrator selects the target user and confirms the revocation or deactivation.
+    * 3d2. System immediately terminates the user's active sessions and revokes their permissions (FR-7.5.2).
   * 4a. Permissions exceed the Administrator's level:
     * 4a1. System blocks the change and informs that a Super-Administrator is required (UC-28).

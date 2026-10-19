@@ -13,7 +13,7 @@
 
 * **UR-1.1 (Authentication):** Users must be able to securely log into the portal using their verified corporate email address and password.  
 * **UR-1.2 (Invoice Visibility):** Users must be able to view, download, and track the status of their assigned clients and sections.  
-* **UR-1.3 (User Preferences):** Users can configure personal preferences and accessibility options in the system, but cannot change its behavior. Only super-administrators can do this.
+* **UR-1.3 (User Preferences):** Users can configure personal display and accessibility preferences (e.g., language, theme, font size, contrast, default filters).
 
 #### **B. Administrators (Internal Employees)**
 
@@ -142,7 +142,7 @@
 * **FR-7.5 (Session Security & Access Controls):**   
   * **FR-7.5.1:** The system shall automatically terminate an active user session after a configurable period of inactivity (e.g., 10 minutes).   
   * **FR-7.5.2:** The system shall immediately terminate active user sessions upon administrative account deactivation.   
-  * **FR-7.5.3:** The system shall temporarily block further authentication attempts for a set duration (e.g., 5 minutes) after three consecutive failed login attempts. 
+  * **FR-7.5.3:** The system shall temporarily block further authentication attempts for a configurable duration (e.g., 5 minutes, adjustable by Super-Administrators) after a configurable number of consecutive failed login attempts (e.g., 3 attempts, also adjustable by Super-Administrators). 
 
 ## **Non-Functional Requirements (NFRs)**
 

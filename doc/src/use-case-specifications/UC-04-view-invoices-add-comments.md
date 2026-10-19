@@ -10,10 +10,10 @@
   * *Base User:* Wants to check the lifecycle status of invoices and coordinate with colleagues on a specific invoice (UR-1.2, FR-2.8).
   * *Mentioned user:* Wants to be notified only when their attention is required on a specific invoice.
   * *Company (Product Owner):* Wants collaboration to stay contextual and traceable, avoiding unstructured chat (FR-2.8).
-* **Preconditions:** The user is authenticated (UC-01) and has permission to access the invoice's customer.
+* **Preconditions:** The user is authenticated (UC-01) and has permission to access the invoice's customer; attempting to access an unauthorized invoice is rejected (NFR-5.6).
 * **Postconditions:** If a comment is added, it is stored linked to the invoice, with author and timestamp, and mentioned users are notified.
 * **Success Guarantee:** The user views the invoice with its current status (FR-2.4) and, optionally, downloads its PDF or publishes a comment that notifies the mentioned users.
-* **Minimal Guarantee:** The invoice data is never modified through this use case; comments that fail to save are not partially stored.
+* **Minimal Guarantee:** The invoice data is never modified through this use case; comments that fail to save are not partially stored; no invoice outside the user's authorized scope is ever accessible, even via direct URL (NFR-5.6).
 * **Trigger:** The user selects an invoice from the dashboard or a search result (UC-03).
 * **Main Success Scenario:**
 1. **User:** Selects an invoice.
@@ -21,7 +21,7 @@
 3. **User:** Writes a comment on the invoice and mentions one or more internal users using "@".
 4. **System:** Validates the comment and that the mentioned users exist and are active.
 5. **System:** Stores the comment linked to the invoice, with author and timestamp.
-6. **System:** Sends a targeted notification to each mentioned user (FR-2.8).
+6. **System:** Sends a targeted notification to each mentioned user via the notification subsystem (FR-2.8, UC-23).
 7. **System:** Displays the updated comment thread.
 
 * **Extensions:**
@@ -31,7 +31,8 @@
   * 3a. User only views the invoice and leaves:
     * 3a1. The use case ends with no changes.
   * 4a. Mentioned user does not exist or is inactive:
-    * 4a1. System informs the user and lets them correct the mention.
+    * 4a1. System informs the user and highlights the invalid mention.
+    * 4a2. User corrects the mention; the flow resumes at step 3.
   * 4b. Empty comment:
     * 4b1. System does not allow the comment to be published.
   * 6a. Notification cannot be delivered:

@@ -16,7 +16,7 @@
 * **Trigger:** The user selects "Preferences" in their profile menu.
 * **Main Success Scenario:**
 1. **User:** Requests to configure personal preferences.
-2. **System:** Displays the current preference values (language, theme, contrast, font size, default views and notification display options).
+2. **System:** Displays the current preference values (language, theme, contrast, font size, default views, default filters, and notification display options).
 3. **User:** Modifies one or more preferences and saves the changes.
 4. **System:** Validates the selected values.
 5. **System:** Stores the preferences in the user's profile, separately from the global configuration (NFR-2.7).
@@ -25,8 +25,8 @@
 * **Extensions:**
   * 3a. User cancels the operation:
     * 3a1. System discards the changes and keeps the previous preferences.
+  * 3b. User accidentally closes the form or reloads the page before saving (NFR-1.5):
+    * 3b1. System restores the last saved preferences; unsaved changes are discarded without data loss to the profile.
   * 4a. Invalid or unsupported value:
     * 4a1. System indicates which option is not valid and keeps the rest of the form data.
     * 4a2. The flow resumes at step 3.
-  * 4b. The user tries to modify an option that affects system behaviour:
-    * 4b1. System does not show or does not allow editing that option, since it is reserved to Super-Administrators (UC-28).
