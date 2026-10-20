@@ -74,7 +74,7 @@
 * **FR-2.7 (Financial Period Locking):**  
   * The system shall allow Administrators to mark financial periods as administratively closed, blocking all invoice creation, editing, or deletion within that period without an explicit audited Super-Administrator exception.  
 * **FR-2.8 (Invoice Contextual Collaboration):**  
-  * The system shall allow users to leave contextual comments on specific invoice records and @mention other internal users (triggering targeted notifications). General unstructured chat shall not be permitted.
+  * The system shall allow users to leave contextual comments on specific invoice records and \@mention other internal users (triggering targeted notifications). General unstructured chat shall not be permitted.
 
 #### **3\. Banking Integration & Payment Reconciliation**
 
