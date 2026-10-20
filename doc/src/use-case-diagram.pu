@@ -141,7 +141,6 @@ SuperAdmin -- UC17
 SuperAdmin -- UC28
 
 ' Automated System Actor Associations
-Timer -- UC12
 Timer -- UC13
 Timer -- UC20
 Timer -- UC23
@@ -159,6 +158,8 @@ UC20 ..> UC21 : <<include>>
 UC06 <.. UC07 : <<extend>>\n(erasure request)
 UC08 <.. UC09 : <<extend>>\n(commercial exception)
 UC14 <.. UC17 : <<extend>>\n(period locked)
+UC15 <.. UC17 : <<extend>>\n(period locked)
 UC20 <.. UC22 : <<extend>>\n(ambiguous transaction)
+
 
 @enduml

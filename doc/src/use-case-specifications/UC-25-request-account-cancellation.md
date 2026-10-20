@@ -3,7 +3,7 @@
 * **ID / Code:** UC-25
 * **Use Case Name:** Request Account Cancellation
 * **Description:** Allows a user responsible for a customer account to request the cancellation of that customer's subscription account. The request is sent to an Administrator for formal review (includes UC-23).
-* **Primary Actor:** Base User (inherited by Administrator and Super-Administrator)
+* **Primary Actor:** Base User
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**

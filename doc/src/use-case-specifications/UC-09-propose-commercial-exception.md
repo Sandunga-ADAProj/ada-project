@@ -3,7 +3,7 @@
 * **ID / Code:** UC-09
 * **Use Case Name:** Propose Commercial Exception
 * **Description:** Allows an authorized user to propose non-standard commercial conditions for a customer subscription (temporary volume discount, free period, custom price, or waiving the initial prorated charge to defer billing to the following month), which then enter an approval workflow. It extends UC-08 at the extension point *commercial exception* and can also be started directly by a Base User on an existing subscription.
-* **Primary Actor:** Base User (inherited by Administrator and Super-Administrator)
+* **Primary Actor:** Base User
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal (extends UC-08)
 * **Stakeholders & Interests:**
