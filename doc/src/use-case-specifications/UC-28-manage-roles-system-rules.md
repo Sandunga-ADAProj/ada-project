@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-28
 * **Use Case Name:** Manage Roles & System Rules
-* **Description:** Allows the Super-Administrator to define custom roles and permissions, and to modify system-wide configuration: business rules and workflows (e.g., approval thresholds, reminder intervals, session timeout, login block duration), business calendar and integration settings (banking API, Email/SMS gateway, simulated Stripe).
+* **Description:** Allows the Super-Administrator to define custom roles and permissions, and to manage system-wide operational workflows, business rules (e.g., approval thresholds, reminder intervals, session timeout, login block duration), business calendar and integration settings (banking API, Notification Gateway, simulated Stripe payment environment) (UR-3.1, UR-3.2, FR-7.1, FR-7.8).
 * **Primary Actor:** Super-Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Super-Administrator:* Wants full control of roles, security and platform configuration (UR-3.1, UR-3.2, FR-7.1).
+  * *Super-Administrator:* Wants full administrative control of roles, security and system configuration (UR-3.1, UR-3.2, FR-7.1, FR-7.8).
   * *All users:* Depend on correct roles and stable rules.
   * *Company (Product Owner):* Wants configuration changes to be controlled, auditable and separated from operational data (NFR-2.7).
 * **Preconditions:** The actor is authenticated with the Super-Administrator role.
@@ -23,14 +23,14 @@
 5. **System:** Saves the role, applies it to the assigned users and logs the change.
 
 * **Extensions:**
-  * 1a. Manage system rules and workflows:
+  * 1a. Manage system rules and workflows (FR-7.8):
     * 1a1. System displays configurable rules: discount approval thresholds (FR-2.6.1), reminder intervals, inactivity timeout, failed-login block duration, cancellation workflow…
     * 1a2. Super-Administrator modifies values; System validates and saves them as a new configuration version.
     * 1a3. If validation fails: System indicates the invalid value and does not save (see also extension 4a).
   * 1b. Manage business calendar:
     * 1b1. Super-Administrator defines working days, weekends and regional holidays (FR-4.4.1), used by UC-19.
   * 1c. Manage integration settings:
-    * 1c1. Super-Administrator updates banking API, Email/SMS gateway or simulated Stripe settings (NFR-2.10).
+    * 1c1. Super-Administrator updates banking API, Notification Gateway or simulated Stripe settings (FR-3.4, FR-7.8).
     * 1c2. System tests the connection before saving and shows the result.
       * 1c2a. Connection test fails:
         * 1c2a1. System warns the Super-Administrator and keeps the previous settings unless explicitly confirmed.

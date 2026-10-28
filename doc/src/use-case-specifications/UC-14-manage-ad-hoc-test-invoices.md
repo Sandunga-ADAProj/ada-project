@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-14
 * **Use Case Name:** Manage Ad-Hoc & Test Invoices
-* **Description:** Allows an Administrator to manually create one-off (ad-hoc) invoices for a customer and to create, edit and delete test/draft invoices that have not been issued, keeping a secure audit log. If the target period is locked, UC-17 may extend this use case. Extension point: *period locked* (step 5) → UC-17.
+* **Description:** Allows an Administrator to manually create one-off (ad-hoc) invoices for a customer and to create, edit and delete test/draft invoices that have not been issued, keeping a secure audit log (UR-2.3, FR-2.3). If the target period is locked, UC-17 may extend this use case. Extension point: *period locked* (step 5) → UC-17.
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants to bill extra services or correct situations not covered by recurring billing (FR-2.3.1).
+  * *Administrator:* Wants to bill extra services, manage draft lifecycle or correct situations not covered by recurring billing (UR-2.3, FR-2.3.1).
   * *Company (Product Owner):* Wants drafts to be editable but every change audited (FR-2.3.2).
   * *Auditor:* Requires that issued invoices can never be edited or deleted.
 * **Preconditions:** The Administrator is authenticated (UC-01); the customer exists.

@@ -2,27 +2,27 @@
 
 * **ID / Code:** UC-20
 * **Use Case Name:** Reconcile Bank Payments
-* **Description:** The System Scheduler periodically obtains bank transactions (includes UC-21) and automatically matches them with outstanding invoices using reference number, amount and metadata, updating invoice and account standing. Ambiguous transactions trigger UC-22 through the extension point **ambiguous transaction**.
-* **Primary Actor:** System Scheduler. Supporting actor: Banking API (via UC-21)
+* **Description:** The system periodically obtains bank transactions (includes UC-21) and automatically matches them with outstanding invoices using reference number, amount and metadata, updating invoice and account standing (UR-2.4, FR-3.2, FR-3.4). Ambiguous transactions trigger UC-22 through the extension point **ambiguous transaction**.
+* **Primary Actor:** None (Automated / Time-triggered process). Supporting actor: Banking API (via UC-21)
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
   * *Company (Product Owner):* Wants automatic, fast payment verification (FR-3.2, NFR-1.3).
-  * *Administrator:* Wants only doubtful cases to require manual work (FR-3.3).
+  * *Administrator:* Wants to oversee payment reconciliation and have only doubtful cases require manual review (UR-2.4, FR-3.3).
   * *Customer company:* Wants paid invoices to stop generating reminders promptly.
-* **Preconditions:** The bank integration is configured; there are outstanding invoices ("sent", "overdue", "partially reconciled").
+* **Preconditions:** The bank integration or simulated payment environment is configured (FR-3.1, FR-3.4); there are outstanding invoices ("sent", "overdue", "partially reconciled").
 * **Postconditions:** Matched invoices are "paid" or "partially reconciled"; ambiguous transactions are queued for review.
 * **Success Guarantee:** Each clearly matched transaction updates the invoice status (FR-2.4) and the account standing (FR-2.5.2); administrators are notified of paid invoices (FR-4.2.1).
 * **Minimal Guarantee:** No invoice is marked as paid unless the match is unambiguous (FR-3.3); each transaction is processed in isolation (NFR-6.1) and never applied twice (NFR-2.2).
 * **Trigger:** Scheduled execution of the reconciliation process (frequency allowing payment status to be reflected within 1 minute – NFR-1.3).
 * **Main Success Scenario:**
-1. **System Scheduler:** Starts the reconciliation process.
-2. **System:** **Includes UC-21** to fetch new bank transactions.
+1. **System:** Initiates the periodic reconciliation process.
+2. **System:** **Includes UC-21** to fetch new bank or simulated payment transactions.
 3. **System:** For each transaction not yet processed, searches outstanding invoices by reference number, amount and metadata (FR-3.2).
 4. **System:** Finds a single invoice matching exactly.
 5. **System:** Links the transaction to the invoice and marks it as "paid".
 6. **System:** Updates the customer's account standing (FR-2.5.2), cancels pending reminders for that invoice and notifies administrators (FR-4.2.1).
-7. **System:** Records the execution result in the system health screen (NFR-2.9).
+7. **System:** Records the execution result in the system health dashboard (FR-6.10).
 
 * **Extensions:**
   * 2a. Bank integration error:

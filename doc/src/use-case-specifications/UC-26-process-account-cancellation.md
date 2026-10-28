@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-26
 * **Use Case Name:** Process Account Cancellation
-* **Description:** Allows an Administrator to review and approve or reject a cancellation request. When approved, recurring billing is frozen while overdue reminders for outstanding invoices persist and historical records are retained.
+* **Description:** Allows an Administrator to review and approve or reject a cancellation request, managing outstanding financial obligations (UR-2.6, FR-5.1, FR-5.2, FR-5.3). When approved, recurring billing is frozen while overdue reminders for outstanding invoices persist and historical records are retained.
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants to see outstanding obligations before deciding (FR-5.3.2).
+  * *Administrator:* Wants to oversee cancellation management and review outstanding obligations before deciding (UR-2.6, FR-5.3.2).
   * *Company (Product Owner):* Wants to stop billing cancelled customers but keep collecting outstanding debt (FR-5.1, FR-5.2).
   * *Customer company:* Wants no new invoices after cancellation.
   * *Tax authority:* Requires statutory retention of invoices (FR-5.4).

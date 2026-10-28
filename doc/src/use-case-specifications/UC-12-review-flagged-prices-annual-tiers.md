@@ -2,8 +2,8 @@
 
 * **ID / Code:** UC-12
 * **Use Case Name:** Review Flagged Prices & Annual Tiers
-* **Description:** At the beginning of each period, the System Scheduler identifies accounts that require an annual revenue-range and pricing review and collects prices flagged as inconsistent; an Administrator reviews them, validating or modifying prices without retroactive adjustments.
-* **Primary Actor:** Administrator. Supporting actor: System Scheduler (identifies accounts and flags them)
+* **Description:** At the beginning of each period, the system automatically identifies accounts that require an annual revenue-range and pricing review and collects prices flagged as inconsistent; an Administrator reviews them, validating or modifying prices without retroactive adjustments.
+* **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
@@ -14,9 +14,9 @@
 * **Postconditions:** Each reviewed account has its price validated or updated, and its review is closed.
 * **Success Guarantee:** Validated or modified prices are recorded with data sources, user, timestamp, previous and new price (FR-2.6.4, FR-6.6.2) and applied only to future invoices.
 * **Minimal Guarantee:** No price change is applied automatically without human validation, and past invoices are never adjusted.
-* **Trigger:** The System Scheduler starts the annual review at the beginning of the period, or a price is flagged as "Pending Review" (UC-08, UC-11).
+* **Trigger:** Beginning of the annual period (scheduled review), or a price is flagged as "Pending Review" (UC-08, UC-11).
 * **Main Success Scenario:**
-1. **System Scheduler:** Starts the annual pricing review process at the beginning of the period.
+1. **System:** Initiates the annual pricing review process at the beginning of the period.
 2. **System:** Identifies accounts that require revenue-range and pricing review and adds them, together with prices flagged as "Pending Review", to the review queue (FR-6.6.1, FR-2.6.1).
 3. **System:** Notifies administrators and shows the pending reviews in the dashboard (FR-6.2).
 4. **Administrator:** Opens an account from the review queue.

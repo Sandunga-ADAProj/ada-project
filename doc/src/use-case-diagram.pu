@@ -39,8 +39,7 @@ actor "Super-Administrator" as SuperAdmin
 
 ' System Actors
 actor "Banking API" as BankAPI << System >>
-actor "Email / SMS Gateway" as NotifSystem << System >>
-actor "System Scheduler" as Timer << System >>
+actor "Notification Gateway" as NotifGateway << System >>
 
 
 '=== System Boundary ===
@@ -140,12 +139,9 @@ SuperAdmin -- UC11
 SuperAdmin -- UC17
 SuperAdmin -- UC28
 
-' Automated System Actor Associations
-Timer -- UC13
-Timer -- UC20
-Timer -- UC23
+' External System Actor Associations
 UC21 -- BankAPI
-UC23 -- NotifSystem
+UC23 -- NotifGateway
 
 ' Include Relationships (Shared Subfunctions & External Calls)
 UC13 ..> UC19 : <<include>>
@@ -160,6 +156,5 @@ UC08 <.. UC09 : <<extend>>\n(commercial exception)
 UC14 <.. UC17 : <<extend>>\n(period locked)
 UC15 <.. UC17 : <<extend>>\n(period locked)
 UC20 <.. UC22 : <<extend>>\n(ambiguous transaction)
-
 
 @enduml

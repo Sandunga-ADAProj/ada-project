@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-15
 * **Use Case Name:** Issue & Send Invoice
-* **Description:** Allows an Administrator to issue an invoice in "ready to issue" state (making it legally final) and send it to the customer's billing contact. Sending includes the automated notification process (UC-23).
+* **Description:** Allows an Administrator to issue an invoice in "ready to issue" state (making it legally final) and send it to the customer's billing contact, managing the invoice lifecycle status (UR-2.3, FR-2.4). Sending includes the automated notification process (UC-23).
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants to issue invoices safely, without losing or duplicating them, and to know exactly what failed if something goes wrong (NFR-1.5, NFR-1.6).
+  * *Administrator:* Wants to issue invoices safely, without losing or duplicating them, and to know exactly what failed if something goes wrong (UR-2.3, NFR-1.5, NFR-1.6).
   * *Customer company:* Wants to receive the invoice immediately (FR-4.1.1).
   * *Company (Product Owner):* Wants compliant, sequentially numbered invoices and payment follow-up.
 * **Preconditions:** The invoice is in "ready to issue" state; the customer has an active billing contact; the period is open.
@@ -29,10 +29,10 @@
     * 3a1. The invoice remains "ready to issue".
   * 4a. Missing data or no active billing contact:
     * 4a1. System blocks issuance and identifies the missing mandatory invoice information.
-  * 4b. Period locked:
+  * 4b. Period locked (extension point *period locked*):
     * 4b1. System blocks issuance (FR-2.7); a Super-Administrator override (UC-17) is required.
   * 5a. Delivery to the customer fails:
     * 5a1. System keeps the invoice "issued", queues a retry and shows a specific message: "Invoice was issued but could not be sent" (NFR-1.6).
-    * 5a2. System records the delivery failure and makes it visible in the system health screen (NFR-2.9).
+    * 5a2. System records the delivery failure and makes it visible in the system health dashboard (FR-6.10).
   * \*a. Page reloaded during issuance:
     * \*a1. System detects the operation already in progress/completed and does not issue the invoice twice (NFR-1.5).

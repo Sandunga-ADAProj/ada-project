@@ -17,7 +17,7 @@
 * **Trigger:** The approver opens a pending proposal from a notification or the dashboard (UC-03).
 * **Main Success Scenario:**
 1. **Approver:** Opens a pending commercial exception.
-2. **System:** Displays the proposal and its relevant commercial informatcion.
+2. **System:** Displays the proposal and its relevant commercial information.
 3. **Approver:** Approves the proposal, optionally adding a comment.
 4. **System:** Verifies that the approver's authorization level covers the amount (FR-2.6.3).
 5. **System:** Applies the exception to the subscription for the defined period, records the pricing change in the audit trail (FR-2.6.4), and records the rate change in the customer timeline (FR-6.7.2).

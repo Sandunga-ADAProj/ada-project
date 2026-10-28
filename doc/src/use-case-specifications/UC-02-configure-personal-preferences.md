@@ -2,24 +2,24 @@
 
 * **ID / Code:** UC-02
 * **Use Case Name:** Configure Personal Preferences
-* **Description:** Allows a user to configure their personal display and accessibility preferences (e.g., language, theme, font size, contrast, default filters), without affecting the global behaviour of the system.
+* **Description:** Allows a user to configure their personal display and accessibility preferences (e.g., language, theme, font size, contrast, default filters), without affecting the global behaviour or business rules of the system (UR-1.3, FR-6.9).
 * **Primary Actor:** Base User (inherited by Administrator and Super-Administrator)
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Base User:* Wants to adapt the interface to their needs and accessibility requirements (UR-1.3, NFR-1.7).
-  * *Super-Administrator:* Wants to guarantee that personal preferences never alter system-wide configuration, which only they can change (UR-1.3, NFR-2.7).
+  * *Base User:* Wants to adapt the interface to their needs and accessibility requirements (UR-1.3, FR-6.9, NFR-1.7).
+  * *Super-Administrator:* Wants to guarantee that personal preferences never alter system-wide configuration, which only they can change (UR-1.3, FR-6.9, NFR-2.7).
 * **Preconditions:** The user is authenticated (UC-01).
 * **Postconditions:** The user's preferences are stored and applied to their own sessions.
-* **Success Guarantee:** The new preferences are saved in the user's profile and applied immediately to the interface.
-* **Minimal Guarantee:** Global system configuration remains unchanged under any scenario; if saving fails, the previous preferences remain in force.
+* **Success Guarantee:** The new preferences are saved in the user's profile and applied immediately to the interface (FR-6.9).
+* **Minimal Guarantee:** Global system configuration remains unchanged under any scenario; if saving fails, the previous preferences remain in force (FR-6.9, NFR-2.7).
 * **Trigger:** The user selects "Preferences" in their profile menu.
 * **Main Success Scenario:**
 1. **User:** Requests to configure personal preferences.
-2. **System:** Displays the current preference values (language, theme, contrast, font size, default views, default filters, and notification display options).
+2. **System:** Displays the current preference values (language, theme, contrast, font size, default views, default filters, and notification display options) (FR-6.9).
 3. **User:** Modifies one or more preferences and saves the changes.
 4. **System:** Validates the selected values.
-5. **System:** Stores the preferences in the user's profile, separately from the global configuration (NFR-2.7).
+5. **System:** Stores the preferences in the user's profile, separately from the global configuration (FR-6.9, NFR-2.7).
 6. **System:** Applies the new preferences to the interface and shows a confirmation message.
 
 * **Extensions:**

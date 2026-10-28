@@ -7,7 +7,7 @@
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal (extends UC-08)
 * **Stakeholders & Interests:**
-  * *Base User (account manager):* Wants to propose non-standard commercial conditions for a customer customers (FR-2.6.2).
+  * *Base User (account manager):* Wants to propose non-standard commercial conditions for a customer (FR-2.6.2).
   * *Administrator / Super-Administrator:* Want every financial deviation to be controlled and approved (FR-2.6.3).
   * *Company (Product Owner):* Wants full traceability of price changes (FR-2.6.4).
 * **Preconditions:** The user is authenticated and has permission to manage the customer's account; the customer has a subscription (existing or being set up in UC-08).
@@ -27,6 +27,5 @@
 * **Extensions:**
   * 4a. Invalid data (e.g., discount over 100 %, end date before start date):
     * 4a1. System indicates the errors; the flow resumes at step 3.
-  UC-10.
   * 6a. Primary approver unavailable:
     * 6a1. System routes the proposal to the substitute approver configured in UC-27 (FR-7.2).

@@ -2,31 +2,31 @@
 
 * **ID / Code:** UC-08
 * **Use Case Name:** Set Up Subscription Plan
-* **Description:** Allows an Administrator to create or modify a customer's monthly subscription, linking it to a billing plan, a billing anchor date, payment terms and, optionally, a future activation date. It contains the extension point **commercial exception**, which triggers UC-09.
+* **Description:** Allows an Administrator to create or modify a customer's monthly subscription, linking it to a billing plan, a billing anchor date, payment terms and, optionally, a future activation date, enforcing mandatory tax validations for recurring billing (UR-2.1, FR-2.1, FR-2.9). It contains the extension point **commercial exception**, which triggers UC-09.
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants to link customers to plans quickly and correctly (UR-2.1).
+  * *Administrator:* Wants to link customers to plans quickly and correctly (UR-2.1, FR-2.1, FR-2.9).
   * *Company (Product Owner):* Wants subscriptions with customizable anchor dates and payment terms that feed automatic invoicing (BR-1, BR-2).
   * *Customer company:* Wants to be billed according to the agreed conditions and start date.
 * **Preconditions:** The Administrator is authenticated (UC-01); the customer exists (UC-05); standard pricing is configured (UC-11).
 * **Postconditions:** The customer has a subscription in "Active" or "Pending Activation" state, linked to a plan.
 * **Success Guarantee:** The subscription is stored with plan, price, billing anchor date, payment terms and start date; if the start date is in the future, the customer stays in "Pending Activation" and no invoices or reminders are generated until then (FR-2.1.2); pricing data is stored, and any modification to an existing price is recorded in the pricing audit trail (FR-2.6.4).
-* **Minimal Guarantee:** Recurring billing is never activated for a customer without sufficient tax information (Blocked Actions requirement).
+* **Minimal Guarantee:** Recurring billing is never activated for a customer without complete required tax information (FR-2.9).
 * **Trigger:** The Administrator selects "Set up subscription" for a customer (e.g., at the end of UC-05).
 * **Main Success Scenario:**
 1. **Administrator:** Requests to set up a subscription for a customer.
 2. **System:** Displays the available plans with their standard prices and price ranges (FR-2.6.1).
 3. **Administrator:** Selects a plan and sets the billing anchor date, payment terms and start date.
-4. **System:** Validates the data and checks that the customer has the tax information required for invoicing.
+4. **System:** Validates the data and checks that the customer has the mandatory tax information required for recurring billing (FR-2.9).
 5. **System:** Shows a summary of the subscription and the expected first invoice date.
 6. **Administrator:** Confirms the subscription.
 7. **System:** Stores the subscription with status "Active" (start date reached) or "Pending Activation" (future start date) (FR-2.1.2), logs the pricing data (FR-2.6.4) and records the event in the customer timeline (FR-6.7.2).
 
 * **Extensions:**
-  * 4a. Customer lacks sufficient tax information:
-    * 4a1. System blocks activation and explicitly warns which data are missing (Blocked Actions requirement).
+  * 4a. Customer lacks required tax information:
+    * 4a1. System blocks activation and displays an explanatory error message indicating which tax data are missing (FR-2.9).
     * 4a2. System alerts administrators about missing customer information (FR-4.2.2). The use case ends or the Administrator completes the data (UC-05) and restarts.
   * 4b. Price outside the configured range:
     * 4b1. System flags the price as "Pending Review" (FR-2.6.1); it will be handled in UC-12.

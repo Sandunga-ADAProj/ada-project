@@ -7,12 +7,12 @@
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Base User:* Wants fast and simple access to the portal to work with their assigned clients and sections (UR-1.1).
+  * *Base User:* Wants fast and simple access to the portal to work with their assigned clients and sections (UR-1.1, FR-7.6).
   * *Company (Product Owner):* Wants confidential billing and customer data to be accessible only to authorized staff (NFR-5.1).
   * *Super-Administrator:* Wants access attempts to be controlled and suspicious behaviour to be blocked automatically (FR-7.5.3).
 * **Preconditions:** The user has an active account registered in the system with a verified corporate email address.
 * **Postconditions:** An authenticated session associated with the user's role and permissions is created.
-* **Success Guarantee:** The user is authenticated, a new session with an inactivity timeout (FR-7.5.1) is started, and the user is redirected to the dashboard (UC-03) showing only the data their permissions allow.
+* **Success Guarantee:** The user is authenticated (FR-7.6), a new session with an inactivity timeout (FR-7.5.1) is started, and the user is redirected to the dashboard (UC-03) showing only the data their permissions allow.
 * **Minimal Guarantee:** No session is created for invalid credentials; credentials are never stored or logged in plain text, and every failed attempt is recorded for security auditing.
 * **Trigger:** The user opens the portal URL or selects "Log In".
 * **Main Success Scenario:**
@@ -20,8 +20,8 @@
 2. **System:** Displays the login form requesting corporate email and password.
 3. **User:** Enters their credentials and submits the form.
 4. **System:** Validates that both fields are filled in and correctly formatted.
-5. **System:** Verifies that the account is active and not temporarily blocked, and checks the credentials against the stored (hashed) values.
-6. **System:** Creates an authenticated session linked to the user's role and permissions and starts the inactivity timer (FR-7.5.1).
+5. **System:** Verifies that the account is active and not temporarily blocked, and checks the credentials against the stored (hashed) values (FR-7.6).
+6. **System:** Creates an authenticated session linked to the user's role and permissions (FR-7.6) and starts the inactivity timer (FR-7.5.1).
 7. **System:** Redirects the user to their dashboard (UC-03).
 
 * **Extensions:**

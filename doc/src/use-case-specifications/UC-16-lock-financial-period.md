@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-16
 * **Use Case Name:** Lock Financial Period
-* **Description:** Allows an Administrator to mark a financial period (e.g., a month or quarter) as administratively closed, blocking any creation, edition or deletion of invoices within that period (FR-2.7).
+* **Description:** Allows an Administrator to mark a financial period (e.g., a month or quarter) as administratively closed, blocking any creation, edition or deletion of invoices within that period (UR-2.3, FR-2.7).
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants to freeze closed periods so that exported accounting data cannot change (FR-2.7).
+  * *Administrator:* Wants to freeze closed periods so that exported accounting data cannot change (UR-2.3, FR-2.7).
   * *External accounting service:* Requires stable figures for closed periods.
   * *Auditor:* Wants evidence of who closed each period and when.
 * **Preconditions:** The Administrator is authenticated and the selected financial period is open.

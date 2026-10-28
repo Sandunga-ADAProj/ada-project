@@ -2,18 +2,18 @@
 
 * **ID / Code:** UC-04
 * **Use Case Name:** View Invoices & Add Comments
-* **Description:** Allows a user to view, download and track the status of invoices of their assigned clients, and to leave contextual comments on a specific invoice, mentioning other internal users.
+* **Description:** Allows a user to view, download and track the status of invoices belonging to their assigned clients, and to leave contextual comments on a specific invoice, mentioning other internal users (UR-1.2, FR-2.8, FR-6.8).
 * **Primary Actor:** Base User (inherited by Administrator and Super-Administrator)
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Base User:* Wants to check the lifecycle status of invoices and coordinate with colleagues on a specific invoice (UR-1.2, FR-2.8).
+  * *Base User:* Wants to check the lifecycle status of invoices and coordinate with colleagues on a specific invoice (UR-1.2, FR-2.8, FR-6.8).
   * *Mentioned user:* Wants to be notified only when their attention is required on a specific invoice.
   * *Company (Product Owner):* Wants collaboration to stay contextual and traceable, avoiding unstructured chat (FR-2.8).
-* **Preconditions:** The user is authenticated (UC-01) and has permission to access the invoice's customer; attempting to access an unauthorized invoice is rejected (NFR-5.6).
+* **Preconditions:** The user is authenticated (UC-01) and has permission to access the invoice's customer (FR-6.8); attempting to access an unauthorized invoice is rejected (FR-6.8, NFR-5.6).
 * **Postconditions:** If a comment is added, it is stored linked to the invoice, with author and timestamp, and mentioned users are notified.
-* **Success Guarantee:** The user views the invoice with its current status (FR-2.4) and, optionally, downloads its PDF or publishes a comment that notifies the mentioned users.
-* **Minimal Guarantee:** The invoice data is never modified through this use case; comments that fail to save are not partially stored; no invoice outside the user's authorized scope is ever accessible, even via direct URL (NFR-5.6).
+* **Success Guarantee:** The user views the invoice with its current status (FR-2.4) and, optionally, downloads its PDF (FR-6.8) or publishes a comment that notifies the mentioned users.
+* **Minimal Guarantee:** The invoice data is never modified through this use case; comments that fail to save are not partially stored; no invoice outside the user's authorized scope is ever accessible, even via direct URL (FR-6.8, NFR-5.6).
 * **Trigger:** The user selects an invoice from the dashboard or a search result (UC-03).
 * **Main Success Scenario:**
 1. **User:** Selects an invoice.
@@ -25,7 +25,7 @@
 7. **System:** Displays the updated comment thread.
 
 * **Extensions:**
-  * 2a. User downloads the invoice:
+  * 2a. User downloads the invoice (FR-6.8):
     * 2a1. User requests the PDF.
     * 2a2. System generates/serves the PDF preserving special characters correctly (NFR-2.6). The use case ends.
   * 3a. User only views the invoice and leaves:

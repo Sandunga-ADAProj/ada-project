@@ -2,25 +2,25 @@
 
 * **ID / Code:** UC-27
 * **Use Case Name:** Delegate Permissions & Guest Access
-* **Description:** Allows an Administrator to grant or revoke portal permissions to staff members for specific customer accounts or sections, temporarily delegate account management, assign substitute approvers and provision temporary guest accounts with minimum privileges (e.g., external accountants).
+* **Description:** Allows an Administrator to grant or revoke portal permissions to staff members for specific customer accounts or sections without modifying global role definitions (UR-2.2, FR-7.7), temporarily delegate account management (FR-7.3), assign substitute approvers (FR-7.2) and provision temporary guest accounts with minimum privileges (e.g., external accountants, FR-7.4).
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants to organize who manages which customers and cover absences (UR-2.2, FR-7.2, FR-7.3).
+  * *Administrator:* Wants to organize who manages which customers, cover absences and manage scoped permissions without altering global roles (UR-2.2, FR-7.2, FR-7.3, FR-7.7).
   * *Staff member / delegate:* Wants the access needed to do their work, only for the required time.
   * *External accountant (guest):* Needs temporary, read-limited access (FR-7.4).
   * *Company (Product Owner):* Wants the principle of least privilege and full traceability.
 * **Preconditions:** The Administrator is authenticated and has permission management rights; roles are defined (UC-28).
 * **Postconditions:** Permissions, delegations, substitute approvers or guest accounts are updated.
 * **Success Guarantee:** Changes are applied immediately, logged in the audit trail (FR-7.2), preserve the original assignment (FR-7.3.2) and temporary access ends automatically on expiry.
-* **Minimal Guarantee:** An Administrator cannot grant permissions higher than their own; guest accounts never receive more than the minimum required privileges (FR-7.4).
+* **Minimal Guarantee:** An Administrator cannot grant permissions higher than their own or modify global role definitions (FR-7.7); guest accounts never receive more than the minimum required privileges (FR-7.4).
 * **Trigger:** The Administrator selects "Permissions & delegation".
 * **Main Success Scenario:**
 1. **Administrator:** Requests to manage permissions.
 2. **System:** Displays staff members, their roles, assigned customer accounts/sections and active delegations.
-3. **Administrator:** Selects a staff member and grants or revokes permissions for specific customer accounts or sections.
-4. **System:** Validates that the permissions do not exceed the Administrator's own.
+3. **Administrator:** Selects a staff member and grants or revokes customer-specific or section-specific permissions without modifying global roles (FR-7.7).
+4. **System:** Validates that the permissions do not exceed the Administrator's own and that global roles remain untouched (FR-7.7).
 5. **System:** Applies the changes and records them in the audit trail.
 
 * **Extensions:**
@@ -37,5 +37,5 @@
   * 3d. Revoke access / deactivate user:
     * 3d1. Administrator selects the target user and confirms the revocation or deactivation.
     * 3d2. System immediately terminates the user's active sessions and revokes their permissions (FR-7.5.2).
-  * 4a. Permissions exceed the Administrator's level:
-    * 4a1. System blocks the change and informs that a Super-Administrator is required (UC-28).
+  * 4a. Permissions exceed the Administrator's level or attempt to alter global role definitions:
+    * 4a1. System blocks the change and informs that a Super-Administrator is required (FR-7.7, UC-28).

@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-24
 * **Use Case Name:** Configure Notification Triggers
-* **Description:** Allows an Administrator to create, edit, enable/disable and delete custom rule-based notification triggers (e.g., invoices more than N days overdue, outstanding balance above X €), defining recipients and channel.
+* **Description:** Allows an Administrator to create, edit, enable/disable and delete custom rule-based notification triggers (e.g., invoices more than N days overdue, outstanding balance above X €), defining recipients and channel for proactive collections and risk monitoring (UR-2.5, FR-4.3).
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants proactive alerts adapted to operational needs (FR-4.3).
+  * *Administrator:* Wants proactive alerts and automated collection triggers adapted to operational needs (UR-2.5, FR-4.3).
   * *Company (Product Owner):* Wants to reduce overdue debt and detect risks early.
 * **Preconditions:** The Administrator is authenticated and has notification configuration permissions.
 * **Postconditions:** The rule is stored and active/inactive as configured.

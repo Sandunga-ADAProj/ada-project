@@ -2,12 +2,12 @@
 
 * **ID / Code:** UC-22
 * **Use Case Name:** Review Unmatched Payment
-* **Description:** Extends UC-20 when a bank transaction is ambiguous, delayed, duplicated or cannot be associated: an Administrator reviews it and manually assigns it to one or more invoices, marks it as duplicate, or leaves it unresolved.
+* **Description:** Extends UC-20 when a bank transaction is ambiguous, delayed, duplicated or cannot be associated: an Administrator reviews it and manually assigns it to one or more invoices, marks it as duplicate, or leaves it unresolved (UR-2.4, FR-3.3).
 * **Primary Actor:** Administrator
 * **Scope:** Subscription Management & Invoicing System
 * **Level:** User Goal (extends UC-20 at extension point *ambiguous transaction*)
 * **Stakeholders & Interests:**
-  * *Administrator:* Wants all the information needed to decide quickly.
+  * *Administrator:* Wants to monitor unmatched payments and have all the information needed to resolve them quickly (UR-2.4, FR-3.3).
   * *Customer company:* Does not want to receive overdue reminders for invoices already paid.
   * *Company (Product Owner):* Wants accurate balances and no premature "paid" statuses (FR-3.3).
 * **Preconditions:** There is at least one transaction flagged for review (UC-20).
