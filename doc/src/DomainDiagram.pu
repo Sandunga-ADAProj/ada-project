@@ -1,0 +1,214 @@
+@startuml
+left to right direction
+hide circle
+skinparam classAttributeIconSize 0
+hide empty members
+
+' Class styling
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+
+' === Domain Classes (Attributes Only) ===
+
+class User {
+    userId 
+    email 
+    state 
+}
+
+class Admin {
+}
+
+class SuperAdmin {
+}
+
+class Customer {
+    customerId 
+    commercialName 
+    tradingName 
+    legalName 
+    taxId 
+    taxAddress 
+    country 
+    currency
+    companyEmail
+    emailVerified
+    status 
+    standing 
+    tags
+}
+
+class Contact {
+    contactId
+    name
+    email
+    phone
+    isBillingContact
+    state 
+}
+
+class BillingPlan {
+    name
+    basePrice
+    minPrice
+    maxPrice
+}
+
+class Subscription {
+    startDate
+    billingAnchorDay 
+    paymentTermsDays 
+    price
+    status
+}
+
+class CommercialException {
+    type
+    value
+    startDate
+    endDate
+    status 
+}
+
+class Invoice {
+    invoiceNumber
+    type 
+    status
+    issueDate
+    dueDate
+    subtotal
+    vatAmount
+    total
+}
+
+class InvoiceLine {
+    description
+    quantity
+    unitPrice
+    taxRate
+}
+
+class Comment {
+    text
+    createdAt 
+    mentions 
+}
+
+class CancellationRequest {
+    requestDate
+    reason
+    outstandingBalance
+    status
+}
+
+class BankTransaction {
+    reference
+    amount
+    valueDate
+    status
+}
+
+class FinancialPeriod {
+    startDate
+    endDate
+    locked
+}
+
+class PaymentAllocation {
+    allocatedAmount
+    allocationDate
+}
+
+class Notification {
+    notificationId
+    type
+    status
+    scheduledAt
+    sentAt
+}
+
+
+' === Domain Relationships ===
+
+' Actor / User Hierarchy
+Admin --|> User
+SuperAdmin --|> Admin
+
+' User & Administration Associations
+User "0..*" --> "0..*" Customer : accesses assigned / manages
+User "1" --> "0..*" Comment : authors
+Comment "0..*" --> "0..*" User : mentions
+Notification "0..*" --> "0..1" User : alerts
+User "1" --> "0..*" CommercialException : proposes
+User "1" --> "0..*" CancellationRequest : requests
+Admin "0..1" --> "0..*" CommercialException : approves / rejects
+Admin "0..1" --> "0..*" CancellationRequest : processes
+Admin "0..1" --> "0..*" FinancialPeriod : locks
+Admin "0..1" --> "0..*" BankTransaction : reviews unmatched
+SuperAdmin "0..1" --> "0..*" FinancialPeriod : overrides lock
+SuperAdmin "0..*" --> "0..*" BillingPlan : configures pricing
+
+' Customer, Contacts & Cancellation
+Customer "1" *-- "1..*" Contact : has
+Notification "0..*" --> "0..1" Contact : sent to
+Customer "1" --> "0..*" CancellationRequest : subject of
+Customer "1" --> "0..*" Subscription : holds
+Customer "1" --> "0..*" Invoice : billed via
+' Subscriptions, Plans & Exceptions
+Subscription "0..*" --> "1" BillingPlan : governed by
+Subscription "1" --> "0..*" CommercialException : applies
+Subscription "0..1" --> "0..*" Invoice : generates recurring
+
+' Invoicing, Lines, Comments, Periods & Payments
+Invoice "1" *-- "0..*" InvoiceLine : contains
+Invoice "1" *-- "0..*" Comment : has thread
+Invoice "0..*" --> "1" FinancialPeriod : belongs to
+BankTransaction "1" -- "0..*" PaymentAllocation : allocated through
+Notification "0..*" --> "0..1" Invoice : concerns
+Invoice "1" -- "0..*" PaymentAllocation : receives
+
+' === Requirement Notes ===
+
+note bottom of Contact
+  **FR-1.3 & FR-1.6**: Customer must keep at least 
+  one active billing contact. Deactivated/anonymized 
+  contacts preserve historical invoice audit trails.
+end note
+
+note bottom of Invoice
+  **FR-2.4 & FR-2.7**: Tracks lifecycle states from 
+  DRAFT to PAID. Cannot be created, edited, or deleted 
+  if its FinancialPeriod is locked (unless overridden).
+end note
+
+note bottom of Subscription
+  **FR-2.1 & FR-5.1**: Generates recurring invoices on 
+  billingAnchorDay. Freezes generation upon account 
+  cancellation while keeping overdue collection active.
+end note
+
+note bottom of Notification
+  A notification must have exactly one recipient:
+  either one internal User or one customer Contact.
+  The related Invoice is optional because some
+  notifications concern other system events.
+end note
+
+@enduml
