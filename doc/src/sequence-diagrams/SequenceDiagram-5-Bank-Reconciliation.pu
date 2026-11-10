@@ -1,0 +1,130 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Bank Transaction Ingestion & Automated Reconciliation (UC-20, UC-21, UC-22, FR-3.1, FR-3.2, FR-3.3, FR-3.4)
+
+actor Admin as "adminUser : Administrator"
+
+box "Presentation Layer" #F5F7FA
+    participant View as "reconcileView : InvoicingAndReconciliationView" <<boundary>>
+end box
+
+box "Application Layer" #EBF0F5
+    participant Ctrl as "reconcileCtrl : ReconciliationController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    participant Gateway as "bankingGateway : BankingPaymentGateway" <<interface>>
+    participant Tx as "bankTx : BankTransaction"
+    participant Invoice as "matchedInvoice : Invoice"
+    participant Alloc as "paymentAlloc : PaymentAllocation"
+    participant Cust as "customerAccount : Customer"
+end box
+
+box "Infrastructure Layer" #F5F7FA
+    participant Adapter as "bankingAdapter : BankingApiAdapter" <<infrastructure>>
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: External Banking API Transaction Ingestion (UC-21, FR-3.1, FR-3.4) ==
+
+Ctrl -> Gateway : fetchTransactionsSince(checkpointTimestamp)
+activate Ctrl
+activate Gateway
+
+' Polymorphic dispatch across architecture boundary
+Gateway -> Adapter : fetchTransactionsSince(checkpointTimestamp)
+activate Adapter
+note over Adapter: Queries external banking API\nSupports Simulated Stripe Mode (FR-3.4)
+create Tx
+Adapter --> Tx : <<create>> (ref="INV-2026-042", amount=850.00, valueDate=today, status="PENDING")
+Adapter --> Gateway : return List<BankTransaction>
+deactivate Adapter
+
+Gateway --> Ctrl : return transactionsList
+deactivate Gateway
+
+== Step 2: Automated Matching & Account Standing Update (UC-20, FR-3.2, FR-3.3) ==
+
+loop for each bankTx in transactionsList
+    Ctrl -> Ctrl : matchByReferenceAndAmount(bankTx.reference, bankTx.amount)
+    
+    alt Exact Match Found (Reference & Amount Validated)
+        create Alloc
+        Ctrl --> Alloc : <<create>> (allocatedAmount=850.00, allocationDate=today)
+        activate Alloc
+        Alloc --> Ctrl : return paymentAlloc
+        deactivate Alloc
+
+        Ctrl -> Invoice : changeStatus(PAID)
+        activate Invoice
+        Invoice --> Ctrl : return true
+        deactivate Invoice
+
+        Ctrl -> Cust : setStanding(UP_TO_DATE)
+        activate Cust
+        Cust --> Ctrl : return void
+        deactivate Cust
+
+        ref over Ctrl, Invoice : ref DS-BASE: Automated Payment Notification & Audit (FR-4.2.1)
+    else Ambiguous or Unmatched Transaction (FR-3.3 Protection)
+        Ctrl -> Tx : setStatus("UNMATCHED")
+        activate Tx
+        Tx --> Ctrl : return void
+        deactivate Tx
+
+        ref over Ctrl, Tx : ref DS-BASE: Alert Administrator of Unmatched Transaction (FR-4.2.2)
+    end
+end
+deactivate Ctrl
+
+== Step 3: Manual Administrator Review & Resolution (UC-22) ==
+
+Admin -> View : onResolveUnmatchedClicked(bankTxId, selectedInvoiceId)
+activate View
+
+View -> Ctrl : resolveUnmatchedTransaction(adminUser, bankTx, matchedInvoice)
+activate Ctrl
+
+Ctrl -> Alloc : allocatePayment(bankTx, matchedInvoice, bankTx.amount)
+activate Alloc
+Alloc --> Ctrl : return paymentAlloc
+deactivate Alloc
+
+Ctrl -> Invoice : changeStatus(PAID)
+activate Invoice
+Invoice --> Ctrl : return true
+deactivate Invoice
+
+Ctrl --> View : renderUnmatchedPayments(remainingQueue)
+deactivate Ctrl
+
+View --> Admin : Displays transaction successfully reconciled
+deactivate View
+
+@enduml
+

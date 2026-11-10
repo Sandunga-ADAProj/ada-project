@@ -1,0 +1,96 @@
+@startuml
+left to right direction
+
+' Global settings
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+' Use Case styling
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Actor styling
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+'=== Actors ===
+actor "Base User" as User
+actor "Administrator" as Admin
+actor "Super-Administrator" as SuperAdmin
+
+'=== System Boundary ===
+rectangle "Subscription Management & Invoicing System\n[1. CRM, Portal & Subscriptions]" {
+
+    ' 1. Portal Access & Navigation (UC01 - UC04)
+    usecase "Log In to Portal" as UC01
+    usecase "Configure Personal Preferences" as UC02
+    usecase "View Dashboard & Search Records" as UC03
+    usecase "View Invoices & Add Comments" as UC04
+
+    ' 2. Customer Onboarding & CRM (UC05 - UC07)
+    usecase "Register Customer Profile" as UC05
+    usecase UC06 as "Manage Customer Contacts
+    --
+    **extension points**
+    erasure request"
+    usecase "Anonymize Contact Data" as UC07
+
+    ' 3. Subscriptions & Pricing (UC08 - UC12)
+    usecase UC08 as "Set Up Subscription Plan
+    --
+    **extension points**
+    commercial exception"
+    usecase "Propose Commercial Exception" as UC09
+    usecase "Approve Commercial Exception" as UC10
+    usecase "Configure Standard Pricing & Targets" as UC11
+    usecase "Review Flagged Prices & Annual Tiers" as UC12
+
+}
+
+'=== Relationships ===
+' Actor Generalizations
+Admin --|> User
+SuperAdmin --|> Admin
+
+' Base User Associations
+User -- UC01
+User -- UC02
+User -- UC03
+User -- UC04
+User -- UC09
+
+' Administrator Associations
+Admin -- UC05
+Admin -- UC06
+Admin -- UC07
+Admin -- UC08
+Admin -- UC10
+Admin -- UC12
+
+' Super-Administrator Associations
+SuperAdmin -- UC11
+
+' Extend Relationships (Conditional Workflows)
+UC06 <.. UC07 : <<extend>>\n(erasure request)
+UC08 <.. UC09 : <<extend>>\n(commercial exception)
+
+@enduml
+

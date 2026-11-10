@@ -1,0 +1,158 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Authentication, Account Delegation & Contextual Collaboration (UC-01, UC-02, UC-04, UC-27, UR-1.1, UR-2.2, FR-2.8)
+
+actor Staff as "staffUser : Base User"
+actor Admin as "adminUser : Administrator"
+
+' ─────────────────────────────────────────────────────────────────────────────
+' PARTICIPANTS — aligned with ComponentsDiagram.pu
+'
+'  Presentation Layer:
+'    PortalDashboardView      (<<boundary>>) — AccessConfigAPI
+'    InvoicingAndReconciliationView (<<boundary>>) — InvoicingBillingAPI
+'
+'  Application Layer:
+'    AccessAndConfigController (<<control>>) — uses UserAPI, BillingPlanAPI,
+'                                              NotificationGateway
+'    InvoicingAndBillingController (<<control>>) — uses InvoiceAPI,
+'                                                  NotificationGateway,
+'                                                  BusinessCalendarService
+'
+'  Domain Layer:
+'    User & Access subdomain  → User, AccountDelegation  (via UserAPI)
+'    Invoice Management subdomain → Invoice, Comment     (via InvoiceAPI)
+' ─────────────────────────────────────────────────────────────────────────────
+
+box "Presentation Layer" #F5F7FA
+    ' PortalDashboardView — name from ComponentsDiagram (<<boundary>>)
+    participant PView as "portalView : PortalDashboardView" <<boundary>>
+    ' InvoicingAndReconciliationView — name from ComponentsDiagram (<<boundary>>)
+    participant IView as "invoicingView : InvoicingAndReconciliationView" <<boundary>>
+end box
+
+box "Application Layer" #EBF0F5
+    ' AccessAndConfigController — uses UserAPI & NotificationGateway
+    participant ACtrl as "accessCtrl : AccessAndConfigController" <<control>>
+    ' InvoicingAndBillingController — uses InvoiceAPI & NotificationGateway
+    participant ICtrl as "invoicingCtrl : InvoicingAndBillingController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    ' ── User & Access subdomain (UserAPI) ────────────────────────────────────
+    participant User as "authenticatedUser : User"
+    ' AccountDelegation belongs to the User & Access subdomain (UserAPI port)
+    participant Delegation as "delegation : AccountDelegation"
+    ' ── Invoice Management subdomain (InvoiceAPI) ────────────────────────────
+    participant Invoice as "targetInvoice : Invoice"
+    participant Comment as "contextComment : Comment"
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Authentication & Dashboard Retrieval (UC-01, UC-02, UR-1.1, UR-1.3) ==
+
+Staff -> PView : onLoginClicked("staff@company.com", "secretHash")
+activate PView
+
+' PView → AccessAndConfigController via AccessConfigAPI (ComponentsDiagram)
+PView -> ACtrl : authenticateUser("staff@company.com", "secretHash")
+activate ACtrl
+
+' ACtrl → User & Access domain via UserAPI (ComponentsDiagram)
+ACtrl -> User : verifyCredentials("secretHash")
+activate User
+User --> ACtrl : return isAuthenticated (true)
+deactivate User
+
+ACtrl -> ACtrl : getDashboardSummary(authenticatedUser)
+activate ACtrl
+deactivate ACtrl
+
+ACtrl --> PView : renderDashboardSummary(dashboardData)
+deactivate ACtrl
+
+PView --> Staff : Displays customized dashboard overview
+deactivate PView
+
+== Step 2: Time-Bound Permission Delegation (UC-27, UR-2.2) ==
+
+Admin -> PView : onDelegateAccessClicked(granteeUser, customerScope, validUntil)
+activate PView
+
+' PView → AccessAndConfigController via AccessConfigAPI (ComponentsDiagram)
+PView -> ACtrl : delegateAccountAccess(adminUser, staffUser, granteeUser, customerScope, validUntil)
+activate ACtrl
+
+' ACtrl → User & Access domain via UserAPI (ComponentsDiagram)
+' AccountDelegation is an entity within the User & Access subdomain
+create Delegation
+ACtrl --> Delegation : <<create>> (startDate=today, validUntil=validUntil, scope=customerScope, status=ACTIVE)
+activate Delegation
+Delegation --> ACtrl : return delegation
+deactivate Delegation
+
+ref over ACtrl, Delegation : ref DS-BASE: Delegation Audit Trail & Security Notification (UR-2.2)
+
+ACtrl --> PView : renderDelegationSuccess(delegation)
+deactivate ACtrl
+
+PView --> Admin : Displays active delegated access entry
+deactivate PView
+
+== Step 3: Contextual Invoice Collaboration & Mentions (UC-04, FR-2.8) ==
+
+Staff -> IView : onAddCommentClicked(invoiceNumber, text="@admin Please review tax rate")
+activate IView
+
+' IView → InvoicingAndBillingController via InvoicingBillingAPI (ComponentsDiagram)
+IView -> ICtrl : postInvoiceComment(staffUser, targetInvoice, "@admin Please review tax rate")
+activate ICtrl
+
+' ICtrl → Invoice Management domain via InvoiceAPI (ComponentsDiagram)
+create Comment
+ICtrl --> Comment : <<create>> (text="@admin Please review tax rate", createdAt=now(), mentions=["admin"])
+activate Comment
+Comment --> ICtrl : return contextComment
+deactivate Comment
+
+ICtrl -> Invoice : addComment(contextComment)
+activate Invoice
+Invoice --> ICtrl : return true
+deactivate Invoice
+
+' Targeted mention notification via NotificationGateway (ComponentsDiagram)
+' ICtrl uses NotificationGateway port → NotificationServiceAdapter → SMTP
+ref over ICtrl, Comment : ref DS-BASE: Targeted Mention Notification Dispatch (FR-2.8)
+
+ICtrl --> IView : renderInvoiceDetails(targetInvoice, commentsList)
+deactivate ICtrl
+
+IView --> Staff : Displays refreshed comment thread with highlighted @mention
+deactivate IView
+
+@enduml

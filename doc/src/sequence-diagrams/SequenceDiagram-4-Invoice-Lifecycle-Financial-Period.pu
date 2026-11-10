@@ -1,0 +1,146 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Invoice Lifecycle, Financial Period Lock & Accounting Export (UC-14, UC-15, UC-16, UC-17, UC-18, FR-2.4, FR-2.7, FR-4.1.1)
+
+actor Admin as "adminUser : Administrator"
+actor SuperAdmin as "superAdmin : Super-Administrator"
+
+box "Presentation Layer" #F5F7FA
+    participant View as "invoicingView : InvoicingAndReconciliationView" <<boundary>>
+end box
+
+box "Application Layer" #EBF0F5
+    participant Ctrl as "invoicingCtrl : InvoicingAndBillingController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    participant Invoice as "targetInvoice : Invoice"
+    participant Period as "fiscalPeriod : FinancialPeriod"
+    participant Pkg as "accountingExport : AccountingExportPackage"
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Issue Validation & Period Lock Constraint (UC-15, UC-16, UC-17, FR-2.7) ==
+
+Admin -> View : onIssueInvoiceClicked(invoiceNumber)
+activate View
+
+View -> Ctrl : issueAndSendInvoice(adminUser, targetInvoice)
+activate Ctrl
+
+Ctrl -> Period : isLocked()
+activate Period
+Period --> Ctrl : return isPeriodLocked
+deactivate Period
+
+alt isPeriodLocked == true (FR-2.7: Period Closure Enforcement)
+    Ctrl --> View : renderError("Financial Period administratively closed")
+    View --> Admin : Displays period lock violation error
+    
+    ' Super-Administrator Exception Path (UC-17)
+    SuperAdmin -> View : onOverridePeriodClicked(fiscalPeriod, reason="Tax Audit Adjustment")
+    View -> Ctrl : overrideLockedPeriod(superAdmin, fiscalPeriod, "Tax Audit Adjustment")
+    
+    Ctrl -> Period : overrideLock("Tax Audit Adjustment")
+    activate Period
+    Period -> Period : unlockTemporarily()
+    Period --> Ctrl : return true
+    deactivate Period
+
+    ref over Ctrl, Period : ref DS-BASE: Super-Admin Override Audit Trail (FR-2.7)
+    
+    Ctrl --> View : renderOverrideGranted()
+    View --> SuperAdmin : Displays lock override confirmed
+end
+
+== Step 2: Invoice Lifecycle Progression & Dispatch (UC-15, FR-2.4, FR-4.1.1) ==
+
+Ctrl -> Invoice : changeStatus(ISSUED)
+activate Invoice
+Invoice --> Ctrl : return true
+deactivate Invoice
+
+Ctrl -> Invoice : changeStatus(SENT)
+activate Invoice
+Invoice --> Ctrl : return true
+deactivate Invoice
+
+' Automatic client notification upon SENT state (FR-4.1.1)
+ref over Ctrl, Invoice : ref DS-BASE: Automated Client Notification & State Audit (FR-4.1.1)
+
+Ctrl --> View : renderInvoiceDetails(targetInvoice)
+deactivate Ctrl
+
+View --> Admin : Displays invoice updated to SENT status
+deactivate View
+
+== Step 3: Accounting Package Generation & Export (UC-18) ==
+
+Admin -> View : onExportPackageClicked(fiscalPeriod)
+activate View
+
+View -> Ctrl : generateAccountingExport(adminUser, fiscalPeriod)
+activate Ctrl
+
+create Pkg
+Ctrl --> Pkg : <<create>> (exportId, version=1, timestamp=now(), filePath="/exports/q4.zip")
+activate Pkg
+Pkg --> Ctrl : return accountingExport
+deactivate Pkg
+
+Ctrl --> View : renderExportDownload(accountingExport)
+deactivate Ctrl
+
+View --> Admin : Delivers downloadable compliant accounting package
+deactivate View
+
+== Step 4: Test Invoice Disposal & Resource Destruction (UC-14) ==
+
+Admin -> View : onDeleteTestInvoiceClicked(testInvoiceNumber)
+activate View
+
+View -> Ctrl : deleteTestInvoice(adminUser, targetInvoice)
+activate Ctrl
+
+Ctrl -> Invoice : isEditable()
+activate Invoice
+Invoice --> Ctrl : return true (Type=TEST, Status=DRAFT)
+deactivate Invoice
+
+' Explicit dynamic destruction of resource (Slide Type 6: Destroy Message)
+Ctrl -> Invoice : dispose()
+destroy Invoice
+
+Ctrl --> View : renderInvoiceDeleted()
+deactivate Ctrl
+
+View --> Admin : Displays test invoice removal confirmation
+deactivate View
+
+@enduml
+

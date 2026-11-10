@@ -1,0 +1,271 @@
+@startuml
+hide circle
+hide empty fields
+hide <<enum>> empty members
+skinparam classAttributeIconSize 0
+
+' Class styling
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' ==========================================
+' 1) PRESENTATION LAYER (BOUNDARIES)
+' ==========================================
+package "com.invoicingsystem.presentation" {
+    class PortalDashboardSummaryView <<boundary>> {
+        + renderLoginForm(): void
+        + onLoginClicked(email: String, password: String): void
+        + renderDashboardSummary(dashboard: DashboardSummary): void
+        + renderSearchResults(records: List<SearchResult>): void
+        + onSearchClicked(query: String, entityType: String): void
+        + onSavePreferencesClicked(prefs: UserPreferences): void
+    }
+
+    class CustomerManagementView <<boundary>> {
+        + renderRegistrationForm(): void
+        + onRegisterCustomerClicked(legalName: String, taxId: String, country: String, companyEmail: String): void
+        + renderContactsList(contacts: List<Contact>): void
+        + renderSubscriptionSetup(plans: List<BillingPlan>): void
+    }
+}
+
+' ==========================================
+' 2) APPLICATION LOGIC LAYER (CONTROLS & DTOs)
+' ==========================================
+package "com.invoicingsystem.application" {
+    class CustomerAndSubscriptionController <<control>> {
+        - notifier: NotificationGateway
+        + registerCustomer(admin: Admin, legalName: String, taxId: String, country: String, companyEmail: String): Customer
+        + manageContacts(admin: Admin, customer: Customer): boolean
+        + anonymizeContactData(admin: Admin, contact: Contact): boolean
+        + configureSubscription(admin: Admin, customer: Customer, plan: BillingPlan): Subscription
+        + submitCommercialException(user: User, sub: Subscription, type: String, val: BigDecimal): CommercialException
+        + approveCommercialException(admin: Admin, exception: CommercialException, approved: boolean): boolean
+    }
+
+    class AccessAndConfigController <<control>> {
+        + authenticateUser(email: String, password: String): boolean        
+        + getDashboardSummary(user: User): DashboardSummary
+        + searchRecords(user: User, query: String, entityType: String): List<SearchResult>
+        + updateUserPreferences(user: User, prefs: UserPreferences): void
+        + updateStandardPricingAndTargets(superAdmin: SuperAdmin, plan: BillingPlan): boolean
+    }
+
+    class DashboardSummary <<DTO>> {
+        + outstandingBalance: BigDecimal
+        + pendingInvoices: int
+        + unmatchedPayments: int
+    }
+
+    class SearchResult <<DTO>> {
+        + entityType: String
+        + recordId: String
+        + displayLabel: String
+    }
+}
+
+' ==========================================
+' 3) CORE DOMAIN LAYER (ENTITIES & CONTRACTS)
+' ==========================================
+package "com.invoicingsystem.domain" {
+
+    ' --- Enumerations ---
+    enum UserState {
+        ACTIVE
+        INACTIVE
+        BLOCKED
+    }
+
+    enum SubscriptionStatus {
+        PENDING_ACTIVATION
+        ACTIVE
+        SUSPENDED
+        CANCELLED
+    }
+
+    enum AccountStanding <<enum>> {
+        UP_TO_DATE
+        OVERDUE
+        SUSPENDED
+        IN_DISPUTE
+    }
+
+    enum ContactState <<enum>> {
+        ACTIVE
+        INACTIVE
+        ANONYMIZED
+    }
+
+    enum CustomerStatus {
+        PENDING_VERIFICATION
+        ACTIVE
+        SUSPENDED
+        CANCELLED
+    }
+
+    enum ApprovalStatus <<enum>> {
+        PENDING
+        APPROVED
+        REJECTED
+    }
+
+    ' --- Domain Interfaces (Contracts) ---
+    interface NotificationGateway <<interface>> {
+        + sendNotification(recipientEmail: String, subject: String, body: String): boolean
+        + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
+    }
+
+    ' --- Entities & Value Objects ---
+    class UserPreferences {
+        - language: String
+        - fontScale: double
+        - highContrast: boolean
+    }
+
+    class PriceReview {
+        - reviewId: String
+        - proposedPrice: BigDecimal
+        - reason: String
+        - status: ApprovalStatus
+        + approve(): void
+        + reject(): void
+    }
+
+    class User {
+        - userId: String
+        - email: String
+        - passwordHash: String
+        - state: UserState
+        - permissions: Set<String>
+        + configureUserPreferences(prefs: UserPreferences): void
+        + proposeCommercialException(sub: Subscription, type: String, value: BigDecimal): CommercialException
+    }
+
+    class Admin {
+        + registerCustomerProfile(legalName: String, taxId: String, country: String, companyEmail: String): Customer        
+        + manageCustomerContacts(customer: Customer): boolean
+        + anonymizeContactData(contact: Contact): boolean
+        + setUpSubsPlan(customer: Customer, plan: BillingPlan): Subscription
+        + approveCommercialEx(ex: CommercialException): boolean
+        + reviewFlaggedPrices(): List<PriceReview>
+    }
+
+    class SuperAdmin {
+        + configStandardPricing(plan: BillingPlan): boolean
+        + configStandardTargets(month: YearMonth, target: BigDecimal): boolean
+    }
+
+    class Customer {
+        - customerId: String
+        - commercialName: String
+        - tradingName: String
+        - legalName: String
+        - taxId: String
+        - taxAddress: String
+        - country: String
+        - currency: String
+        - companyEmail: String
+        - emailVerified: boolean
+        - status: CustomerStatus
+        - standing: AccountStanding
+        - tags: List<String>
+        + addContact(contact: Contact): Contact
+        + deactivateContact(contact: Contact): boolean
+        + hasCompleteTaxInfo(): boolean
+        + getOutstandingBalance(): BigDecimal
+    }
+
+    class Contact {
+        - contactId: String
+        - name: String
+        - email: String
+        - phone: String
+        - isBillingContact: boolean
+        - state: ContactState
+        + anonymize(): void
+    }
+
+    class BillingPlan {
+        - name: String
+        - basePrice: BigDecimal
+        - minPrice: BigDecimal
+        - maxPrice: BigDecimal
+    }
+
+    class Subscription {
+        - subscriptionId: String
+        - startDate: LocalDate
+        - billingAnchorDay: int
+        - paymentTermsDays: int
+        - price: BigDecimal
+        - status: SubscriptionStatus
+        + activate(): boolean
+    }
+
+    class CommercialException {
+        - type: String
+        - value: BigDecimal
+        - startDate: LocalDate
+        - endDate: LocalDate
+        - status: ApprovalStatus
+        + approve(): void
+        + reject(): void
+    }
+}
+
+' ==========================================
+' RELATIONSHIPS & TRAFFIC BETWEEN PACKAGES
+' ==========================================
+
+' Boundary to Control links
+PortalDashboardSummaryView .down.> AccessAndConfigController
+CustomerManagementView .down.> CustomerAndSubscriptionController
+
+' Control orchestrating Domain Entities & Gateways
+CustomerAndSubscriptionController .down.> Customer
+CustomerAndSubscriptionController .down.> Subscription
+CustomerAndSubscriptionController .down.> NotificationGateway
+
+AccessAndConfigController .down.> User
+AccessAndConfigController .down.> BillingPlan
+AccessAndConfigController .down.> DashboardSummary
+AccessAndConfigController .down.> SearchResult
+
+' Inheritance Mapping
+User <|-- Admin
+Admin <|-- SuperAdmin
+
+' Domain Structural Relationships
+User "0..*" --> "0..*" Customer : " -assignedCustomers"
+User "1" *-- "0..1" UserPreferences : preferences
+
+Customer "1" *-- "1..*" Contact : " -contacts"
+Customer "1" --> "0..*" Subscription : " -subscriptions"
+
+Subscription "0..*" --> "1" BillingPlan : " -plan"
+Subscription "1" --> "0..*" CommercialException : " -exceptions"
+
+User "1" --> "0..*" CommercialException : " -proposedExceptions"
+Admin "0..1" --> "0..*" CommercialException : " -reviewedExceptions"
+
+BillingPlan "1" --> "0..*" PriceReview : price reviews
+SuperAdmin "0..*" --> "0..*" BillingPlan : " -configuredPlans"
+
+@enduml
+

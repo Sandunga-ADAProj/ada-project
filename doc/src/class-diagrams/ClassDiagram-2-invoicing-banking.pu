@@ -1,0 +1,254 @@
+@startuml
+hide circle
+hide empty fields
+hide <<enum>> empty members
+skinparam classAttributeIconSize 0
+
+' Class styling
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' ==========================================
+' 1) PRESENTATION LAYER (BOUNDARIES)
+' ==========================================
+package "com.invoicingsystem.presentation" {
+    class InvoicingAndReconciliationView <<boundary>> {
+        + renderInvoiceDetails(invoice: Invoice, comments: List<Comment>): void
+        + onIssueInvoiceClicked(invoiceNumber: String): void
+        + onAddCommentClicked(invoiceNumber: String, text: String): void
+        + renderUnmatchedPayments(transactions: List<BankTransaction>): void
+        + onExportPackageClicked(period: FinancialPeriod): void
+    }
+}
+
+' ==========================================
+' 2) APPLICATION LOGIC LAYER (CONTROLS)
+' ==========================================
+package "com.invoicingsystem.application" {
+    class InvoicingAndBillingController <<control>> {
+        - notifier: NotificationGateway
+        - calendarService: BusinessCalendarService
+        + executeRecurringBillingBatch(executionDate: LocalDate): void
+        + createOrUpdateAdHocInvoice(admin: Admin, customer: Customer): Invoice
+        + deleteTestInvoice(admin: Admin, invoice: Invoice): boolean
+        + issueAndSendInvoice(admin: Admin, invoice: Invoice): Invoice
+        + postInvoiceComment(user: User, invoice: Invoice, text: String): Comment
+        + closeFinancialPeriod(admin: Admin, period: FinancialPeriod): boolean
+        + overrideLockedPeriod(superAdmin: SuperAdmin, period: FinancialPeriod, reason: String): boolean
+        + generateAccountingExport(admin: Admin, period: FinancialPeriod): AccountingExportPackage
+    }
+
+    class ReconciliationController <<control>> {
+        - bankingGateway: BankingPaymentGateway
+        - notifier: NotificationGateway
+        + runAutomatedReconciliation(): void
+        + resolveUnmatchedTransaction(admin: Admin, tx: BankTransaction, invoice: Invoice): boolean
+        + allocatePayment(tx: BankTransaction, invoice: Invoice, amount: BigDecimal): PaymentAllocation
+    }
+}
+
+' ==========================================
+' 3) CORE DOMAIN LAYER (ENTITIES & CONTRACTS)
+' ==========================================
+package "com.invoicingsystem.domain" {
+
+    ' --- Enumerations ---
+    enum InvoiceStatus <<enum>> {
+        DRAFT
+        READY
+        ISSUED
+        SENT
+        OVERDUE
+        PAID
+        PARTIALLY_RECONCILED
+    }
+
+    enum InvoiceType <<enum>> {
+        RECURRING
+        ONE_OFF
+        TEST
+    }
+
+    ' --- Domain Interfaces (Contracts) ---
+    interface BankingPaymentGateway <<interface>> {
+        + fetchTransactionsSince(checkpoint: LocalDateTime): List<BankTransaction>
+        + testConnection(): boolean
+    }
+
+    interface BusinessCalendarService <<interface>> {
+        + isWorkingDay(date: LocalDate, country: String): boolean
+        + getNextWorkingDay(date: LocalDate, country: String): LocalDate
+    }
+
+    interface NotificationGateway <<interface>> {
+        + sendNotification(recipientEmail: String, subject: String, body: String): boolean
+        + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
+    }
+
+    ' --- Domain Entities & Value Objects ---
+    class Invoice {
+        - invoiceNumber: String
+        - type: InvoiceType
+        - status: InvoiceStatus
+        - issueDate: LocalDate
+        - dueDate: LocalDate
+        - subtotal: BigDecimal
+        - vatAmount: BigDecimal
+        - total: BigDecimal
+        + changeStatus(newStatus: InvoiceStatus): boolean
+        + isEditable(): boolean
+    }
+
+    class InvoiceLine {
+        - description: String
+        - quantity: int
+        - unitPrice: BigDecimal
+        - taxRate: BigDecimal
+    }
+
+    class Comment {
+        - text: String
+        - createdAt: LocalDateTime
+    }
+
+    class FinancialPeriod {
+        - startDate: LocalDate
+        - endDate: LocalDate
+        - locked: boolean
+        + lock(): void
+        + overrideLock(reason: String): void
+        + isLocked(): boolean
+    }
+
+    class AccountingExportPackage {
+        - exportId: String
+        - version: int
+        - generatedAt: LocalDateTime
+        - filePath: String
+    }
+
+    class BankTransaction {
+        - reference: String
+        - amount: BigDecimal
+        - valueDate: LocalDate
+        - status: String
+    }
+
+    class PaymentAllocation {
+        - allocatedAmount: BigDecimal
+        - allocationDate: LocalDate
+        + validateAmount(): boolean
+    }
+
+    ' --- Contextual Referenced Entities ---
+    class Customer {
+        - customerId: String
+        - legalName: String
+        + getOutstandingBalance(): BigDecimal
+    }
+
+    class Subscription {
+        - subscriptionId: String
+    }
+
+    class User {
+        - userId: String
+        - email: String
+        + addComment(invoice: Invoice, text: String): Comment
+    }
+
+    class Admin {
+        + manageAdHocInvoice(customer: Customer): Invoice
+        + exportAccPackage(period: FinancialPeriod): AccountingExportPackage
+        + issueInvoice(invoice: Invoice): Invoice
+        + lockFinancialPeriod(period: FinancialPeriod): boolean
+        + reviewUnmatchedPayment(tx: BankTransaction, invoice: Invoice): boolean
+    }
+
+    class SuperAdmin {
+        + overrideLockedPeriod(period: FinancialPeriod, reason: String): boolean
+    }
+}
+
+' ==========================================
+' 4) INFRASTRUCTURE LAYER (EXTERNAL ADAPTERS)
+' ==========================================
+package "com.invoicingsystem.infrastructure" {
+    class BankingApiAdapter {
+        - apiEndpointUrl: String
+        - apiKey: String
+        - simulatedStripeMode: boolean
+        + fetchTransactionsSince(checkpoint: LocalDateTime): List<BankTransaction>
+        + testConnection(): boolean
+        - parseBankPayload(rawJson: String): List<BankTransaction>
+    }
+
+    class RegionalCalendarAdapter {
+        - defaultRegion: String
+        + isWorkingDay(date: LocalDate, country: String): boolean
+        + getNextWorkingDay(date: LocalDate, country: String): LocalDate
+    }
+}
+
+' ==========================================
+' RELATIONSHIPS & TRAFFIC BETWEEN PACKAGES
+' ==========================================
+
+' Boundary to Control links
+InvoicingAndReconciliationView .down.> InvoicingAndBillingController
+InvoicingAndReconciliationView .down.> ReconciliationController
+
+' Control orchestrating Domain Entities & Gateways
+InvoicingAndBillingController .down.> Invoice
+InvoicingAndBillingController .down.> FinancialPeriod
+InvoicingAndBillingController .down.> NotificationGateway
+InvoicingAndBillingController .down.> BusinessCalendarService
+
+ReconciliationController .down.> BankTransaction
+ReconciliationController .down.> Invoice
+ReconciliationController .down.> BankingPaymentGateway
+
+' Infrastructure Implementation (Plugs into Domain Ports)
+BankingPaymentGateway <|.. BankingApiAdapter
+BusinessCalendarService <|.. RegionalCalendarAdapter
+
+' Inheritance Mapping
+User <|-- Admin
+Admin <|-- SuperAdmin
+
+' Domain Structural Relationships
+Customer "1" --> "0..*" Invoice : " -invoices"
+Subscription "0..1" --> "0..*" Invoice : " -generatedInvoices"
+
+Invoice "1" *-- "0..*" InvoiceLine : " -lines"
+Invoice "1" *-- "0..*" Comment : " -comments"
+Invoice "0..*" --> "1" FinancialPeriod : " -period"
+
+Comment "0..*" --> "1" User : " -author"
+Comment "0..*" --> "0..*" User : " -mentions"
+
+BankTransaction "1" -- "0..*" PaymentAllocation : " -allocations"
+Invoice "1" -- "0..*" PaymentAllocation : " -paymentAllocations"
+
+Admin "0..1" --> "0..*" FinancialPeriod : " -lockedPeriods"
+Admin "0..1" --> "0..*" BankTransaction : " -reviewedTransactions"
+SuperAdmin "0..1" --> "0..*" FinancialPeriod : " -overriddenPeriods"
+
+@enduml
+

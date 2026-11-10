@@ -1,0 +1,144 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Subscription Setup & Commercial Exception Approval (UC-08, UC-09, UC-10, UC-12, FR-2.1.2, FR-2.6.2, FR-2.6.3)
+
+actor Staff as "staffUser : Base User"
+actor Admin as "approverAdmin : Administrator"
+
+box "Presentation Layer" #F5F7FA
+    participant View as "customerView : CustomerManagementView" <<boundary>>
+end box
+
+box "Application Layer" #EBF0F5
+    participant Ctrl as "customerCtrl : CustomerAndSubscriptionController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    participant Customer as "targetCustomer : Customer"
+    participant Plan as "standardPlan : BillingPlan"
+    participant Sub as "subscription : Subscription"
+    participant Exception as "commercialException : CommercialException"
+    participant Review as "priceReview : PriceReview"
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Subscription Setup with Deferred Activation (UC-08, FR-2.1.2) ==
+
+Admin -> View : onSetupSubscriptionClicked(customerId, planId, futureStartDate)
+activate View
+
+View -> Ctrl : configureSubscription(admin, targetCustomer, standardPlan)
+activate Ctrl
+
+create Sub
+Ctrl --> Sub : <<create>> (startDate=futureStartDate, anchorDay=1, status="PENDING_ACTIVATION")
+activate Sub
+Sub --> Ctrl : return subscription
+deactivate Sub
+
+Ctrl -> Customer : setSubscription(subscription)
+activate Customer
+Customer --> Ctrl : return true
+deactivate Customer
+
+Ctrl --> View : renderSubscriptionSetup(subscription)
+deactivate Ctrl
+
+View --> Admin : Displays customer in PENDING_ACTIVATION state (FR-2.1.2)
+deactivate View
+
+== Step 2: Propose Commercial Exception & Price Review (UC-09, UC-12, FR-2.6.2, FR-2.6.4) ==
+
+Staff -> View : onProposeExceptionClicked(subId, type="VOLUME_DISCOUNT", value=25.0%)
+activate View
+
+View -> Ctrl : submitCommercialException(staffUser, subscription, "VOLUME_DISCOUNT", 25.0%)
+activate Ctrl
+
+create Exception
+Ctrl --> Exception : <<create>> (type="VOLUME_DISCOUNT", value=25.0%, status=PENDING)
+activate Exception
+Exception --> Ctrl : return commercialException
+deactivate Exception
+
+' Flagging review item for administrator audit
+create Review
+Ctrl --> Review : <<create>> (proposedPrice, reason="Volume discount > threshold", status=PENDING)
+activate Review
+Review --> Ctrl : return priceReview
+deactivate Review
+
+Ctrl --> View : renderExceptionSubmitted(commercialException)
+deactivate Ctrl
+
+View --> Staff : Displays submission confirmation (Pending Administrator Approval)
+deactivate View
+
+== Step 3: Administrator Decision Workflow (UC-10, FR-2.6.3) ==
+
+Admin -> View : onProcessExceptionClicked(exceptionId, approved=true)
+activate View
+
+View -> Ctrl : approveCommercialException(approverAdmin, commercialException, true)
+activate Ctrl
+
+alt approved == true (Exception Granted)
+    Ctrl -> Exception : approve()
+    activate Exception
+    Exception -> Exception : setStatus(APPROVED)
+    Exception --> Ctrl : return void
+    deactivate Exception
+
+    Ctrl -> Sub : setPrice(discountedPrice)
+    activate Sub
+    Sub --> Ctrl : return true
+    deactivate Sub
+
+    ' Reusable cross-cutting reference for audit logging
+    ref over Ctrl, Sub : ref DS-BASE: Notification Dispatch & Pricing Audit Trail (FR-2.6.4)
+
+    Ctrl --> View : return true (Success)
+    View --> Admin : Displays updated subscription with approved discount
+else approved == false (Exception Rejected)
+    Ctrl -> Exception : reject()
+    activate Exception
+    Exception -> Exception : setStatus(REJECTED)
+    Exception --> Ctrl : return void
+    deactivate Exception
+
+    ref over Ctrl, Exception : ref DS-BASE: Notification Dispatch to Staff User
+
+    Ctrl --> View : return false (Rejected)
+    View --> Admin : Displays exception rejection confirmation
+end
+
+deactivate Ctrl
+deactivate View
+
+@enduml
+

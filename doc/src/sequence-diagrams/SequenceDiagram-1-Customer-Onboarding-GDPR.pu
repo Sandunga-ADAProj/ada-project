@@ -1,0 +1,120 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Customer Onboarding & GDPR Contact Management (UC-05, UC-06, UC-07, FR-1.2, FR-1.4, FR-1.6)
+
+actor Admin as "adminUser : Administrator"
+
+box "Presentation Layer" #F5F7FA
+    participant View as "customerView : CustomerManagementView" <<boundary>>
+end box
+
+box "Application Layer" #EBF0F5
+    participant Ctrl as "customerCtrl : CustomerAndSubscriptionController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    participant Customer as "newCustomer : Customer"
+    participant BillingContact as "billingContact : Contact"
+    participant SecContact as "secondaryContact : Contact"
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Customer Profile Registration & Verification (UC-05, FR-1.2, FR-1.4) ==
+
+Admin -> View : onRegisterCustomerClicked(legalName, taxId, country, companyEmail)
+activate View
+
+View -> Ctrl : registerCustomer(admin, legalName, taxId, country, companyEmail)
+activate Ctrl
+
+' Duplicate check via fuzzy matching (FR-1.4)
+Ctrl -> Ctrl : detectPotentialDuplicates(taxId, legalName)
+activate Ctrl
+deactivate Ctrl
+
+create Customer
+Ctrl --> Customer : <<create>> (legalName, taxId, country, companyEmail, status=PENDING_VERIFICATION)
+activate Customer
+Customer --> Ctrl : return newCustomer
+deactivate Customer
+
+create BillingContact
+Ctrl --> BillingContact : <<create>> (name="Primary Billing", email=companyEmail, isBillingContact=true, state=ACTIVE)
+activate BillingContact
+BillingContact --> Ctrl : return billingContact
+deactivate BillingContact
+
+Ctrl -> Customer : addContact(billingContact)
+activate Customer
+Customer --> Ctrl : return billingContact
+deactivate Customer
+
+Ctrl --> View : renderRegistrationSuccess(newCustomer)
+deactivate Ctrl
+
+View --> Admin : Displays registered customer profile and contact list
+deactivate View
+
+== Step 2: Contact Management & GDPR Anonymization (UC-06, UC-07, FR-1.3, FR-1.6) ==
+
+Admin -> View : onAnonymizeContactClicked(customerId, targetContactId)
+activate View
+
+View -> Ctrl : anonymizeContactData(admin, targetContact)
+activate Ctrl
+
+Ctrl -> Customer : deactivateContact(targetContact)
+activate Customer
+
+alt targetContact.isBillingContact == true && hasSingleActiveBillingContact()
+    ' Billing contact protection (FR-1.6)
+    Customer --> Ctrl : return false (Error: Billing Contact Protected)
+    deactivate Customer
+    Ctrl --> View : renderError("Cannot remove sole billing contact")
+    View --> Admin : Displays explanatory error dialog
+else targetContact is Secondary Contact (Erasure Allowed)
+    Customer -> SecContact : anonymize()
+    activate SecContact
+    note over SecContact: Scrubs PII (name, phone, email)\nPreserves contactId for historical invoice audit
+    SecContact --> Customer : return void
+    deactivate SecContact
+    
+    Customer --> Ctrl : return true (Anonymized)
+    deactivate Customer
+
+    ' Reusable cross-cutting reference
+    ref over Ctrl, Customer : ref DS-BASE: Notification Dispatch & Audit Trail (FR-1.3.2)
+
+    Ctrl --> View : renderContactsList(updatedContacts)
+    View --> Admin : Displays refreshed contacts with ANONYMIZED status
+end
+
+deactivate Ctrl
+deactivate View
+
+@enduml

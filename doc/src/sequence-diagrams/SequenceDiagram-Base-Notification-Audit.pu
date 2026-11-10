@@ -1,0 +1,111 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Base Transversal: Notification Dispatch & Audit Trail (FR-4.1, FR-4.2, FR-5.4)
+
+' ─────────────────────────────────────────────────────────────────────────────
+' NOTE ON ABSTRACT PARTICIPANTS
+'
+' This is a reusable base diagram (DS-BASE) referenced by all other SDs via
+' "ref DS-BASE: ...". Its participants are intentionally abstract:
+'
+'   ApplicationController  <<abstract>> — represents any concrete controller
+'     (AccessAndConfigController, CustomerAndSubscriptionController,
+'      InvoicingAndBillingController, ReconciliationController) — see ComponentsDiagram.
+'
+'   DomainEntity  <<abstract>> — represents any concrete domain entity
+'     (Customer, Invoice, Subscription, User, etc.) — see ComponentsDiagram domain components.
+'
+'   ChangeHistoryRecord — cross-cutting audit value object; every domain entity
+'     creates one upon state mutation. Owned by the same subdomain as the mutated entity.
+'     See ComponentsDiagram "Invoice Management" for canonical listing.
+'
+'   Notification — dispatch DTO created by NotificationGateway before async send.
+'     See ComponentsDiagram "Invoice Management" for canonical listing.
+' ─────────────────────────────────────────────────────────────────────────────
+
+box "Application Layer" #EBF0F5
+    ' <<abstract>> — stands for any concrete ApplicationController (see ComponentsDiagram)
+    participant Ctrl as "callerCtrl : ApplicationController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    ' <<abstract>> — stands for any concrete domain entity (see ComponentsDiagram domain components)
+    participant Entity as "domainEntity : DomainEntity"
+    ' ChangeHistoryRecord: cross-cutting audit value object (see ComponentsDiagram note)
+    participant Log as "auditRecord : ChangeHistoryRecord"
+    ' NotificationGateway: domain port implemented by NotificationServiceAdapter (ComponentsDiagram)
+    participant Notifier as "notificationGateway : NotificationGateway" <<interface>>
+    ' Notification: dispatch DTO created before async send (see ComponentsDiagram note)
+    participant Notif as "notification : Notification"
+end box
+
+box "Infrastructure Layer" #F5F7FA
+    ' NotificationServiceAdapter implements NotificationGateway port (ComponentsDiagram)
+    participant Adapter as "notificationAdapter : NotificationServiceAdapter" <<infrastructure>>
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Encapsulated Entity Self-Logging (Audit Trail) ==
+
+Ctrl -> Entity : executeStateTransition(newState, actorId)
+activate Entity
+
+' Entity encapsulates its internal audit logging upon mutation
+Entity -> Entity : logChange("STATE_MODIFIED", actorId)
+activate Entity
+create Log
+Entity --> Log : <<create>> (timestamp, type="STATE_MODIFIED", authorId=actorId)
+deactivate Entity
+
+Entity --> Ctrl : return mutationSuccess (true)
+deactivate Entity
+
+== Step 2: Asynchronous Notification Dispatching ==
+
+' Asynchronous Message (Slide Type 2): Solid line with open arrowhead (non-blocking call)
+Ctrl ->> Notifier : sendNotification(recipientEmail, subject, body)
+activate Notifier
+
+create Notif
+Notifier --> Notif : <<create>> (notificationId, type="SYSTEM_ALERT", status="PENDING")
+
+' Polymorphic non-blocking dispatch to external infrastructure adapter
+Notifier ->> Adapter : sendNotification(recipientEmail, subject, body)
+activate Adapter
+note over Adapter: Delivers email via SMTP\nor external notification API asynchronously\n(Sender continues without blocking)
+Adapter --> Notifier : notifyDeliveryStatus(delivered=true)
+deactivate Adapter
+
+Notifier -> Notif : setSentAt(timestamp)
+activate Notif
+Notif --> Notifier : return void
+deactivate Notif
+
+deactivate Notifier
+
+@enduml

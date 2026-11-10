@@ -1,0 +1,95 @@
+@startuml
+left to right direction
+
+' Global settings
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+' Use Case styling
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Actor styling
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+'=== Actors ===
+' Human Actors
+actor "Administrator" as Admin
+actor "Super-Administrator" as SuperAdmin
+
+' System Actors
+actor "Banking API" as BankAPI << System >>
+
+'=== System Boundary ===
+rectangle "Subscription Management & Invoicing System\n[2. Invoicing, Accounting & Banking]" {
+
+    ' 4. Invoicing & Accounting Operations (UC13 - UC19)
+    usecase "Generate Recurring Invoices" as UC13
+    usecase "Manage Ad-Hoc & Test Invoices" as UC14
+    usecase "Issue & Send Invoice" as UC15
+    usecase "Lock Financial Period" as UC16
+    usecase "Override Locked Period" as UC17
+    usecase "Export Accounting Package" as UC18
+    usecase "Adjust Dates for Non-Working Days" as UC19
+
+    ' 5. Banking & Reconciliation (UC20 - UC22)
+    usecase UC20 as "Reconcile Bank Payments
+    --
+    **extension points**
+    ambiguous transaction"
+    usecase "Fetch Bank Transactions" as UC21
+    usecase "Review Unmatched Payment" as UC22
+
+    ' Shared / Cross-cutting external reference
+    usecase "Send Automated Notifications" as UC23 #F4F6F9
+
+}
+
+'=== Relationships ===
+' Actor Generalizations
+SuperAdmin --|> Admin
+
+' Administrator Associations
+Admin -- UC14
+Admin -- UC15
+Admin -- UC16
+Admin -- UC18
+Admin -- UC22
+
+' Super-Administrator Associations
+SuperAdmin -- UC17
+
+' External System Actor Associations
+UC21 -- BankAPI
+
+' Include Relationships
+UC13 ..> UC19 : <<include>>
+UC15 ..> UC23 : <<include>>
+UC20 ..> UC21 : <<include>>
+
+' Extend Relationships (Conditional Workflows)
+UC14 <.. UC17 : <<extend>>\n(period locked)
+UC15 <.. UC17 : <<extend>>\n(period locked)
+UC20 <.. UC22 : <<extend>>\n(ambiguous transaction)
+
+@enduml
+

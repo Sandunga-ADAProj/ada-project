@@ -1,0 +1,229 @@
+@startuml
+top to bottom direction
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 70
+skinparam ranksep 60
+
+' Styling (same palette as the class diagram)
+skinparam component {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+    ArrowColor #2B3E6A
+}
+skinparam interface {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+skinparam rectangle {
+    BackgroundColor #F4F6FB
+    BorderColor #2B3E6A
+    FontColor #2B3E6A
+}
+skinparam database {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+}
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+skinparam ArrowColor #2B3E6A
+
+
+' 1) PRESENTATION LAYER
+' -----------------------------------------
+rectangle "Presentation Layer" as PRES {
+    component "PortalDashboardView" as PortalView <<boundary>>
+    component "CustomerManagementView" as CustomerView <<boundary>>
+    component "InvoicingAndReconciliationView" as InvoicingView <<boundary>>
+    component "SystemAdministrationView" as AdminView <<boundary>>
+}
+
+' Interfaces between Presentation and Application
+() "AccessConfigAPI" as AccessConfigAPI
+() "CustomerSubscriptionAPI" as CustomerSubscriptionAPI
+() "InvoicingBillingAPI" as InvoicingBillingAPI
+() "ReconciliationAPI" as ReconciliationAPI
+
+
+' 2) APPLICATION LAYER
+' -----------------------------------------
+rectangle "Application Layer" as APP {
+    component "AccessAndConfigController" as AccessCtrl <<control>>
+    component "CustomerAndSubscriptionController" as CustomerCtrl <<control>>
+    component "InvoicingAndBillingController" as BillingCtrl <<control>>
+    component "ReconciliationController" as ReconCtrl <<control>>
+}
+
+' Interfaces between Application and Domain
+() "UserAPI" as UserAPI
+() "CustomerAPI" as CustomerAPI
+() "BillingPlanAPI" as BillingPlanAPI
+() "InvoiceAPI" as InvoiceAPI
+() "TransactionAPI" as TransactionAPI
+
+
+' 3) DOMAIN LAYER
+' -----------------------------------------
+rectangle "Domain Layer" as DOM {
+    ' User & Access subdomain
+    component "User & Access\n(User, Admin, SuperAdmin,\nAccountDelegation)" as UserAccess
+
+    ' Customer & Subscription subdomain
+    ' PriceReview: approval-pending value object proposed alongside CommercialException (SD-2)
+    component "Customer & Subscription\n(Customer, Contact, Subscription,\nBillingPlan, CommercialException,\nCancellationRequest, PriceReview)" as CustomerSub
+
+    ' Invoice Management subdomain
+    ' AccountingExportPackage: download payload generated per fiscal period export (UC-18, SD-4)
+    ' ChangeHistoryRecord: cross-cutting audit value object; every entity creates one on mutation
+    ' Notification: dispatch DTO created by NotificationGateway before async send (DS-BASE)
+    component "Invoice Management\n(Invoice, InvoiceLine, Comment,\nFinancialPeriod, AccountingExportPackage,\nChangeHistoryRecord, Notification)" as InvoiceMgmt
+
+    ' Bank Transactions subdomain
+    ' PaymentAllocation: links a BankTransaction to its matched Invoice (UC-20, UC-22, SD-5)
+    component "Bank Transactions\n(BankTransaction, PaymentAllocation)" as BankTx
+
+    ' Ports defined by the domain (implemented by infrastructure)
+    () "BankingPaymentGateway" as BankingPaymentGateway
+    () "NotificationGateway" as NotificationGateway
+    () "BusinessCalendarService" as BusinessCalendarService
+    () "DataRepository" as DataRepository
+}
+
+
+' 4) INFRASTRUCTURE LAYER
+' -----------------------------------------
+rectangle "Infrastructure Layer" as INFRA {
+    component "BankingApiAdapter" as BankingAdapter
+    component "NotificationServiceAdapter" as NotifAdapter
+    component "RegionalCalendarAdapter" as CalendarAdapter
+    component "PersistenceAdapter" as PersistenceAdapter
+    database "Database" as DB
+}
+
+
+' 5) EXTERNAL SYSTEMS
+' -----------------------------------------
+() "BankingAPI" as BankingAPI
+() "SendEmail" as SendEmail
+component "Banking API\n(or simulated Stripe)" as BankingExt <<external>>
+component "Notification Gateway\n(SMTP)" as NotifExt <<external>>
+
+
+' PROVIDED INTERFACES (plain lines)
+' -----------------------------------------
+AccessCtrl -up- AccessConfigAPI
+CustomerCtrl -up- CustomerSubscriptionAPI
+BillingCtrl -up- InvoicingBillingAPI
+ReconCtrl -up- ReconciliationAPI
+
+UserAccess -up- UserAPI
+CustomerSub -up- CustomerAPI
+CustomerSub -up- BillingPlanAPI
+InvoiceMgmt -up- InvoiceAPI
+BankTx -up- TransactionAPI
+
+BankingAdapter -up- BankingPaymentGateway
+NotifAdapter -up- NotificationGateway
+CalendarAdapter -up- BusinessCalendarService
+PersistenceAdapter -up- DataRepository
+
+BankingExt -up- BankingAPI
+NotifExt -up- SendEmail
+
+
+' REQUIRED INTERFACES (dashed arrows)
+' -----------------------------------------
+
+' Presentation -> Application
+PortalView .down.> AccessConfigAPI
+AdminView .down.> AccessConfigAPI
+CustomerView .down.> CustomerSubscriptionAPI
+InvoicingView .down.> InvoicingBillingAPI
+InvoicingView .down.> ReconciliationAPI
+
+' Application -> Domain
+AccessCtrl .down.> UserAPI
+AccessCtrl .down.> BillingPlanAPI
+CustomerCtrl .down.> CustomerAPI
+' BillingPlanAPI: CustomerCtrl resolves the plan during subscription setup (SD-2, LV-4)
+CustomerCtrl .down.> BillingPlanAPI
+BillingCtrl .down.> InvoiceAPI
+' CustomerAPI: BillingCtrl reads Customer/Subscription data during batch billing (SD-3)
+BillingCtrl .down.> CustomerAPI
+ReconCtrl .down.> InvoiceAPI
+ReconCtrl .down.> TransactionAPI
+' CustomerAPI: ReconCtrl updates Customer.standing after payment reconciliation (SD-5)
+ReconCtrl .down.> CustomerAPI
+
+' Application -> Domain ports
+CustomerCtrl .down.> NotificationGateway
+BillingCtrl .down.> NotificationGateway
+BillingCtrl .down.> BusinessCalendarService
+ReconCtrl .down.> NotificationGateway
+ReconCtrl .down.> BankingPaymentGateway
+
+' Domain <-> Domain
+UserAccess .right.> CustomerAPI
+CustomerSub .right.> InvoiceAPI
+InvoiceMgmt .left.> UserAPI
+BankTx .left.> InvoiceAPI
+
+' Layout hints (invisible): fix the left-to-right order of the domain components
+UserAccess -[hidden]right- CustomerSub
+CustomerSub -[hidden]right- InvoiceMgmt
+InvoiceMgmt -[hidden]right- BankTx
+
+' Domain -> persistence port
+UserAccess .down.> DataRepository
+CustomerSub .down.> DataRepository
+InvoiceMgmt .down.> DataRepository
+BankTx .down.> DataRepository
+
+' Infrastructure -> external systems
+BankingAdapter .down.> BankingAPI
+NotifAdapter .down.> SendEmail
+PersistenceAdapter -down-> DB
+
+
+' NOTES & CONSTRAINTS
+' -----------------------------------------
+note right of CalendarAdapter
+  Internal library: stores the main
+  holidays so we can change
+  things that fall on holidays (FR-4.4.2)
+end note
+
+note right of DB
+  Basic persistence NEEDS REVISION(?)
+end note
+
+note as Constraints
+  **Architectural constraints**
+  1. Each layer only depends on the layer immediately below it.
+     Presentation never accesses Domain, Infrastructure or the Database directly.
+  2. Infrastructure depends on Domain, never the reverse: the Domain
+     defines the ports and Infrastructure implements them.
+  3. Business rules, validations and authorization are enforced in the
+     Application layer, so UI and API behave identically (NFR-2.8, NFR-5.6).
+  4. New payment methods or notification channels are added as new adapters
+     implementing existing ports, without redesigning the core (NFR-2.3).
+  5. Persistence operations are atomic (commit/rollback) (NFR-2.2) and global
+     configuration is stored apart from operational records (NFR-2.7).
+  6. Communication with external systems uses TLS 1.3 or TLS 1.2 where
+      we need it; stored data and backups use AES-256 (NFR-5.1).
+end note
+Constraints .. APP
+
+legend right
+  Plain line: provided interface
+  Dashed arrow: required interface
+endlegend
+
+@enduml

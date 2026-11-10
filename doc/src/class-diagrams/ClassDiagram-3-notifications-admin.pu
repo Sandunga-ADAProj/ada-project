@@ -1,0 +1,236 @@
+@startuml
+hide circle
+hide empty fields
+hide <<enum>> empty members
+skinparam classAttributeIconSize 0
+
+' Class styling
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' ==========================================
+' 1) PRESENTATION LAYER (BOUNDARIES)
+' ==========================================
+package "com.invoicingsystem.presentation" {
+    class SystemAdministrationView <<boundary>> {
+        + renderUserPermissions(): void
+        + renderNotificationRules(rules: List<NotificationRule>): void
+        + renderBusinessRules(rules: List<BusinessRule>): void
+    }
+
+    class CustomerCancellationView <<boundary>> {
+        + onRequestCancellationClicked(customerId: String, reason: String): void
+        + onProcessCancellationClicked(requestId: String, approved: boolean): void
+    }
+}
+
+' ==========================================
+' 2) APPLICATION LOGIC LAYER (CONTROLS)
+' ==========================================
+package "com.invoicingsystem.application" {
+    class AccessAndConfigController <<control>> {
+        + delegateAccountAccess(admin: Admin, originalAssignee: User, grantee: User, scope: Customer, validUntil: LocalDate): AccountDelegation
+        + revokeAccountDelegation(admin: Admin, delegation: AccountDelegation): boolean
+        + provisionGuestAccount(admin: Admin, email: String, validUntil: LocalDate): User
+        + updateUserPermissions(superAdmin: SuperAdmin, user: User, permissions: Set<String>): boolean
+        + manageBusinessRule(superAdmin: SuperAdmin, rule: BusinessRule): boolean  
+    }
+
+    class CustomerAndSubscriptionController <<control>> {
+        - notifier: NotificationGateway
+        + handleCancellationWorkflow(user: User, customer: Customer, reason: String): CancellationRequest
+        + processCancellationRequest(admin: Admin, request: CancellationRequest, approved: boolean): boolean
+    }
+}
+
+' ==========================================
+' 3) CORE DOMAIN LAYER (ENTITIES & CONTRACTS)
+' ==========================================
+package "com.invoicingsystem.domain" {
+
+    ' --- Enumerations ---
+    enum UserState {
+        ACTIVE
+        INACTIVE
+        BLOCKED
+    }
+
+    enum DelegationStatus {
+        ACTIVE
+        EXPIRED
+        REVOKED
+    }
+
+    enum ApprovalStatus <<enum>> {
+        PENDING
+        APPROVED
+        REJECTED
+    }
+
+    ' --- Domain Interfaces (Contracts) ---
+    interface NotificationGateway <<interface>> {
+        + sendNotification(recipientEmail: String, subject: String, body: String): boolean
+        + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
+    }
+
+    ' --- Entities & Value Objects ---
+    class User {
+        - userId: String
+        - email: String
+        - passwordHash: String
+        - state: UserState
+        - permissions: Set<String>
+        + requestAccCancellation(customer: Customer, reason: String): CancellationRequest
+    }
+
+    class Admin {
+        + configNotificationTriggers(rule: NotificationRule): boolean
+        + processAccCancellation(req: CancellationRequest): boolean
+        + authorizeAccountDelegation(delegation: AccountDelegation): boolean
+        + provisionGuestAccount(email: String, validUntil: LocalDate): User
+    }
+
+    class SuperAdmin {
+        + configureUserPermissions(user: User, permissions: Set<String>): boolean        
+        + manageSystemRules(rule: BusinessRule): boolean
+    }
+
+    class AccountDelegation {
+        - delegationId: String
+        - startDate: LocalDate
+        - validUntil: LocalDate
+        - status: DelegationStatus
+        + isActive(date: LocalDate): boolean
+        + expire(): void
+        + revoke(): void
+    }
+
+    class CancellationRequest {
+        - requestDate: LocalDate
+        - reason: String
+        - outstandingBalance: BigDecimal
+        - status: ApprovalStatus
+        + approve(): void
+        + reject(): void
+    }
+
+    class Notification {
+        - notificationId: String
+        - type: String
+        - status: String
+        - scheduledAt: LocalDateTime
+        - sentAt: LocalDateTime
+    }
+
+    class NotificationRule {
+        - ruleId: String
+        - triggerType: String
+        - delayDays: int
+        - enabled: boolean
+    }
+
+    class BusinessRule {
+        - ruleId: String
+        - name: String
+        - value: String
+        - enabled: boolean
+    }
+
+    ' --- Contextual Referenced Entities ---
+    class Customer {
+        - customerId: String
+        - legalName: String
+    }
+
+    class Contact {
+        - contactId: String
+        - name: String
+        - email: String
+    }
+
+    class Invoice {
+        - invoiceNumber: String
+    }
+}
+
+' ==========================================
+' 4) INFRASTRUCTURE LAYER (EXTERNAL ADAPTERS)
+' ==========================================
+package "com.invoicingsystem.infrastructure" {
+    class NotificationServiceAdapter {
+        - smtpHost: String
+        - gatewayApiKey: String
+        + sendNotification(recipientEmail: String, subject: String, body: String): boolean
+        + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
+    }
+}
+
+' ==========================================
+' RELATIONSHIPS & TRAFFIC BETWEEN PACKAGES
+' ==========================================
+
+' Boundary to Control links
+SystemAdministrationView .down.> AccessAndConfigController
+CustomerCancellationView .down.> CustomerAndSubscriptionController
+
+' Control orchestrating Domain Entities & Gateways
+AccessAndConfigController .down.> User
+AccessAndConfigController .down.> AccountDelegation
+CustomerAndSubscriptionController .down.> NotificationGateway
+
+' Infrastructure Implementation (Plugs into Domain Ports)
+NotificationGateway <|.. NotificationServiceAdapter
+
+' Inheritance Mapping
+User <|-- Admin
+Admin <|-- SuperAdmin
+
+' Domain Structural Relationships
+User "1" --> "0..*" CancellationRequest : " -submittedRequests"
+Customer "1" --> "0..*" CancellationRequest : " -cancellationRequests"
+Admin "0..1" --> "0..*" CancellationRequest : " -processedRequests"
+
+Notification "0..*" --> "0..1" User : " -internalRecipient"
+Notification "0..*" --> "0..1" Contact : " -customerRecipient"
+Notification "0..*" --> "0..1" Invoice : " -relatedInvoice"
+
+AccountDelegation "0..*" --> "1" User : originalAssignee
+AccountDelegation "0..*" --> "1" User : delegatedTo
+AccountDelegation "0..*" --> "1" Customer : customerScope
+AccountDelegation "0..*" --> "1" Admin : authorizedBy
+
+Admin "0..*" --> "0..*" NotificationRule : configures
+SuperAdmin "0..*" --> "0..*" BusinessRule : manages
+
+note bottom of Notification
+    Each notification must have exactly one recipient:
+    either an internal User or a customer Contact.
+    The related Invoice is optional.
+end note
+
+note bottom of AccountDelegation
+    The original assignee must already manage
+    the customer account.
+    The delegation must have a valid expiration date.
+    Expired or revoked delegations grant no access.
+    The original assignment remains unchanged.
+end note
+
+@enduml
+

@@ -1,0 +1,140 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Account Cancellation Request & Billing Freeze Workflow (UC-25, UC-26, FR-5.1, FR-5.2, FR-5.3, FR-5.4)
+
+actor Staff as "staffUser : Base User"
+actor Admin as "adminUser : Administrator"
+
+box "Presentation Layer" #F5F7FA
+    ' CustomerManagementView — ComponentsDiagram (<<boundary>>, CustomerSubscriptionAPI)
+    participant View as "custView : CustomerManagementView" <<boundary>>
+end box
+
+box "Application Layer" #EBF0F5
+    ' CustomerAndSubscriptionController — uses CustomerAPI (ComponentsDiagram)
+    participant Ctrl as "custCtrl : CustomerAndSubscriptionController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    ' Customer & Subscription subdomain (via CustomerAPI)
+    participant Customer as "targetCustomer : Customer"
+    participant Sub as "activeSub : Subscription"
+    participant Req as "cancelRequest : CancellationRequest"
+    ' Note: Invoice entity belongs to "Invoice Management" subdomain (InvoiceAPI).
+    ' CustomerAndSubscriptionController has no InvoiceAPI dependency; Invoice is NOT
+    ' messaged directly here — outstanding balance is surfaced through Customer.getOutstandingBalance().
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Cancellation Request Submission (UC-25, FR-5.3) ==
+
+Staff -> View : onRequestCancellationClicked(customerId, reason="Business Restructuring")
+activate View
+
+' View → CustomerAndSubscriptionController via CustomerSubscriptionAPI (ComponentsDiagram)
+View -> Ctrl : handleCancellationWorkflow(staffUser, targetCustomer, "Business Restructuring")
+activate Ctrl
+
+' Outstanding balance is a computed property on Customer, keeping Invoice cross-domain access encapsulated
+Ctrl -> Customer : getOutstandingBalance()
+activate Customer
+Customer --> Ctrl : return balanceAmount (1,250.00 EUR)
+deactivate Customer
+
+create Req
+Ctrl --> Req : <<create>> (requestDate=today, reason="Business Restructuring", balance=1250.00, status=PENDING)
+activate Req
+Req --> Ctrl : return cancelRequest
+deactivate Req
+
+ref over Ctrl, Req : ref DS-BASE: Record Cancellation Request in Audit Log (FR-5.3)
+
+Ctrl --> View : renderCancellationSubmitted(cancelRequest)
+deactivate Ctrl
+
+View --> Staff : Displays cancellation request status as PENDING
+deactivate View
+
+== Step 2: Administrator Processing & Service Freeze (UC-26, FR-5.1, FR-5.2, FR-5.4) ==
+
+Admin -> View : onProcessCancellationClicked(requestId, approved=true)
+activate View
+
+View -> Ctrl : processCancellationRequest(adminUser, cancelRequest, true)
+activate Ctrl
+
+alt approved == true (Cancellation Approved)
+    Ctrl -> Req : approve()
+    activate Req
+    Req -> Req : setStatus(APPROVED)
+    Req --> Ctrl : return void
+    deactivate Req
+
+    ' Freeze recurring generation (FR-5.1)
+    Ctrl -> Sub : setStatus(CANCELLED)
+    activate Sub
+    note over Sub: Recurring invoice generation is frozen immediately\nSubscription remains in records for auditing
+    Sub --> Ctrl : return true
+    deactivate Sub
+
+    Ctrl -> Customer : setStatus(CANCELLED)
+    activate Customer
+    Customer --> Ctrl : return void
+    deactivate Customer
+
+    opt cancelRequest.outstandingBalance > 0 (FR-5.2)
+        ' Historical invoices remain active until settled; balance is tracked on Customer.
+        ' Invoice Management domain enforces this through its own lifecycle rules.
+        note over Customer: Historical unpaid invoices and automated overdue\nreminders remain active until the debt is settled
+        Ctrl -> Customer : setStanding(OVERDUE)
+        activate Customer
+        Customer --> Ctrl : return void
+        deactivate Customer
+    end
+
+    ref over Ctrl, Customer : ref DS-BASE: Cancellation Decision Notification & Audit Trail (FR-5.4)
+
+    Ctrl --> View : renderCancellationProcessed(true)
+    View --> Admin : Displays cancellation processed and billing successfully frozen
+else approved == false (Cancellation Rejected)
+    Ctrl -> Req : reject()
+    activate Req
+    Req -> Req : setStatus(REJECTED)
+    Req --> Ctrl : return void
+    deactivate Req
+
+    ref over Ctrl, Req : ref DS-BASE: Cancellation Rejection Alert
+
+    Ctrl --> View : renderCancellationProcessed(false)
+    View --> Admin : Displays cancellation request rejected
+end
+
+deactivate Ctrl
+deactivate View
+
+@enduml

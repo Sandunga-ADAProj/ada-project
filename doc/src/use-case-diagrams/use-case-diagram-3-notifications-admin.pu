@@ -1,0 +1,91 @@
+@startuml
+left to right direction
+
+' Global settings
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+' Use Case styling
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Actor styling
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+'=== Actors ===
+' Human Actors
+actor "Base User" as User
+actor "Administrator" as Admin
+actor "Super-Administrator" as SuperAdmin
+
+' System Actors
+actor "Notification Gateway" as NotifGateway << System >>
+
+'=== System Boundary ===
+rectangle "Subscription Management & Invoicing System\n[3. Notifications, Lifecycle & Administration]" {
+
+    ' 6. Notifications & Cancellation (UC23 - UC26)
+    usecase "Send Automated Notifications" as UC23
+    usecase "Configure Notification Triggers" as UC24
+    usecase "Request Account Cancellation" as UC25
+    usecase "Process Account Cancellation" as UC26
+
+    note right of UC26
+        Freezes recurring billing (FR-5.1) while
+        persisting overdue reminders and historical
+        invoice records (FR-5.2, FR-5.4)
+    end note
+
+    ' Shared / Cross-cutting external reference
+    usecase "Adjust Dates for Non-Working Days" as UC19 #F4F6F9
+
+    ' 7. Access & System Administration (UC27 - UC28)
+    usecase "Delegate Permissions & Guest Access" as UC27
+    usecase "Manage Roles & System Rules" as UC28
+
+}
+
+'=== Relationships ===
+' Actor Generalizations
+Admin --|> User
+SuperAdmin --|> Admin
+
+' Base User Associations
+User -- UC25
+
+' Administrator Associations
+Admin -- UC24
+Admin -- UC26
+Admin -- UC27
+
+' Super-Administrator Associations
+SuperAdmin -- UC28
+
+' External System Actor Associations
+UC23 -- NotifGateway
+
+' Include Relationships
+UC25 ..> UC23 : <<include>>
+UC23 ..> UC19 : <<include>>
+
+@enduml
+

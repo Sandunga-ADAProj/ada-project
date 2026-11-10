@@ -1,0 +1,127 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+
+' Component/Participant styling
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+
+' Arrow styling
+skinparam arrow {
+    Color #2B3E6A
+}
+
+' Note styling
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram - Automated Recurring Billing Batch & Calendar Adjustment (UC-13, UC-19, FR-2.1.1, FR-2.2.1, FR-2.2.2, FR-2.9)
+
+actor Scheduler as "billingScheduler : SystemDaemon"
+
+box "Application Layer" #EBF0F5
+    participant Ctrl as "invoicingCtrl : InvoicingAndBillingController" <<control>>
+end box
+
+box "Domain Layer" #FFFFFF
+    participant Calendar as "calendarService : BusinessCalendarService" <<interface>>
+    participant Customer as "targetCustomer : Customer"
+    participant Sub as "subscription : Subscription"
+    participant Invoice as "newInvoice : Invoice"
+    participant Line as "lineItem : InvoiceLine"
+end box
+
+box "Infrastructure Layer" #F5F7FA
+    participant CalAdapter as "calendarAdapter : RegionalCalendarAdapter" <<infrastructure>>
+end box
+
+' --- SEQUENCE FLOW ---
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Regional Working Day Verification (UC-19) ==
+
+Scheduler -> Ctrl : executeRecurringBillingBatch(executionDate)
+activate Ctrl
+
+Ctrl -> Calendar : isWorkingDay(executionDate, targetCountry="ES")
+activate Calendar
+
+Calendar -> CalAdapter : isWorkingDay(executionDate, "ES")
+activate CalAdapter
+note over CalAdapter: Evaluates national holidays\nand non-working weekends
+CalAdapter --> Calendar : return isWorking (false)
+deactivate CalAdapter
+
+Calendar --> Ctrl : return false
+deactivate Calendar
+
+opt isWorking == false (Adjust Date for Non-Working Day)
+    Ctrl -> Calendar : getNextWorkingDay(executionDate, "ES")
+    activate Calendar
+    Calendar -> CalAdapter : getNextWorkingDay(executionDate, "ES")
+    activate CalAdapter
+    CalAdapter --> Calendar : return adjustedWorkingDate
+    deactivate CalAdapter
+    Calendar --> Ctrl : return adjustedWorkingDate
+    deactivate Calendar
+end
+
+== Step 2: Batch Invoice Generation Loop & Tax Validation (UC-13, FR-2.1.1, FR-2.9) ==
+
+loop for each active subscription matching billingAnchorDay
+    Ctrl -> Customer : hasCompleteTaxInfo()
+    activate Customer
+    Customer --> Ctrl : return isValidTaxInfo
+    deactivate Customer
+
+    alt isValidTaxInfo == false (FR-2.9: Missing Tax Information Gate)
+        Ctrl -> Customer : setStanding(IN_DISPUTE)
+        activate Customer
+        Customer --> Ctrl : return void
+        deactivate Customer
+
+        ref over Ctrl, Customer : ref DS-BASE: Alert Administrator of Incomplete Tax Data (FR-4.2.2)
+    else isValidTaxInfo == true (Eligible for Automatic Generation)
+        create Invoice
+        Ctrl --> Invoice : <<create>> (invoiceNumber, type=RECURRING, status=READY, issueDate, dueDate)
+        activate Invoice
+        Invoice --> Ctrl : return newInvoice
+        deactivate Invoice
+
+        create Line
+        Ctrl --> Line : <<create>> (desc="Subscription Fee", qty=1, unitPrice=sub.price, taxRate=0.21)
+        activate Line
+        Line --> Ctrl : return lineItem
+        deactivate Line
+
+        Ctrl -> Invoice : addInvoiceLine(lineItem)
+        activate Invoice
+        ' Autofill and VAT compliance calculations (FR-2.2.2)
+        Invoice -> Invoice : calculateVatAndTotals()
+        activate Invoice
+        deactivate Invoice
+        Invoice --> Ctrl : return totalsCalculated
+        deactivate Invoice
+
+        Ctrl -> Customer : linkInvoice(newInvoice)
+        activate Customer
+        Customer --> Ctrl : return true
+        deactivate Customer
+
+        ref over Ctrl, Invoice : ref DS-BASE: Notification Dispatch & Audit Trail (FR-2.2.1)
+    end
+end
+
+Ctrl --> Scheduler : return batchExecutionSummary (successCount, failureCount)
+deactivate Ctrl
+
+@enduml
+
