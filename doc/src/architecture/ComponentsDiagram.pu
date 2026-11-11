@@ -138,42 +138,42 @@ BankingExt -up- BankingAPI
 NotifExt -up- SendEmail
 
 
-' REQUIRED INTERFACES (dashed arrows)
+' REQUIRED INTERFACES (sockets)
 ' -----------------------------------------
 
 ' Presentation -> Application
-PortalView .down.> AccessConfigAPI
-AdminView .down.> AccessConfigAPI
-CustomerView .down.> CustomerSubscriptionAPI
-InvoicingView .down.> InvoicingBillingAPI
-InvoicingView .down.> ReconciliationAPI
+PortalView -down-( AccessConfigAPI
+AdminView -down-( AccessConfigAPI
+CustomerView -down-( CustomerSubscriptionAPI
+InvoicingView -down-( InvoicingBillingAPI
+InvoicingView -down-( ReconciliationAPI
 
 ' Application -> Domain
-AccessCtrl .down.> UserAPI
-AccessCtrl .down.> BillingPlanAPI
-CustomerCtrl .down.> CustomerAPI
+AccessCtrl -down-( UserAPI
+AccessCtrl -down-( BillingPlanAPI
+CustomerCtrl -down-( CustomerAPI
 ' BillingPlanAPI: CustomerCtrl resolves the plan during subscription setup (SD-2, LV-4)
-CustomerCtrl .down.> BillingPlanAPI
-BillingCtrl .down.> InvoiceAPI
+CustomerCtrl -down-( BillingPlanAPI
+BillingCtrl -down-( InvoiceAPI
 ' CustomerAPI: BillingCtrl reads Customer/Subscription data during batch billing (SD-3)
-BillingCtrl .down.> CustomerAPI
-ReconCtrl .down.> InvoiceAPI
-ReconCtrl .down.> TransactionAPI
+BillingCtrl -down-( CustomerAPI
+ReconCtrl -down-( InvoiceAPI
+ReconCtrl -down-( TransactionAPI
 ' CustomerAPI: ReconCtrl updates Customer.standing after payment reconciliation (SD-5)
-ReconCtrl .down.> CustomerAPI
+ReconCtrl -down-( CustomerAPI
 
 ' Application -> Domain ports
-CustomerCtrl .down.> NotificationGateway
-BillingCtrl .down.> NotificationGateway
-BillingCtrl .down.> BusinessCalendarService
-ReconCtrl .down.> NotificationGateway
-ReconCtrl .down.> BankingPaymentGateway
+CustomerCtrl -down-( NotificationGateway
+BillingCtrl -down-( NotificationGateway
+BillingCtrl -down-( BusinessCalendarService
+ReconCtrl -down-( NotificationGateway
+ReconCtrl -down-( BankingPaymentGateway
 
 ' Domain <-> Domain
-UserAccess .right.> CustomerAPI
-CustomerSub .right.> InvoiceAPI
-InvoiceMgmt .left.> UserAPI
-BankTx .left.> InvoiceAPI
+UserAccess -right-( CustomerAPI
+CustomerSub -right-( InvoiceAPI
+InvoiceMgmt -left-( UserAPI
+BankTx -left-( InvoiceAPI
 
 ' Layout hints (invisible): fix the left-to-right order of the domain components
 UserAccess -[hidden]right- CustomerSub
@@ -181,14 +181,15 @@ CustomerSub -[hidden]right- InvoiceMgmt
 InvoiceMgmt -[hidden]right- BankTx
 
 ' Domain -> persistence port
-UserAccess .down.> DataRepository
-CustomerSub .down.> DataRepository
-InvoiceMgmt .down.> DataRepository
-BankTx .down.> DataRepository
+UserAccess -down-( DataRepository
+CustomerSub -down-( DataRepository
+InvoiceMgmt -down-( DataRepository
+BankTx -down-( DataRepository
 
 ' Infrastructure -> external systems
-BankingAdapter .down.> BankingAPI
-NotifAdapter .down.> SendEmail
+BankingAdapter -down-( BankingAPI
+NotifAdapter -down-( SendEmail
+'Not an interface so there is no socket
 PersistenceAdapter -down-> DB
 
 
@@ -222,8 +223,8 @@ end note
 Constraints .. APP
 
 legend right
-  Plain line: provided interface
-  Dashed arrow: required interface
+  Ball (lollipop): provided interface
+  Socket (half circle): required interface
 endlegend
 
 @enduml
