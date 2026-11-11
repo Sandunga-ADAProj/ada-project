@@ -1,0 +1,114 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Notifications and Collaboration
+entity "NOTIFICATION_TEMPLATE" as NOTIFICATION_TEMPLATE {
+  *templateId : string <<PK>>
+  *code : string
+  *version : int
+  *channel : string
+  *subject : string
+  *body : text
+}
+
+entity "NOTIFICATION_RULE" as NOTIFICATION_RULE {
+  *ruleId : string <<PK>>
+  *configuredByUserId : string <<FK>>
+  *templateId : string <<FK>>
+  *triggerType : string
+  delayDays : int
+  thresholdAmount : decimal(19,4)
+  thresholdCurrency : char(3)
+  *frequencyDays : int
+  *recipientPolicy : string
+  *enabled : boolean
+}
+
+entity "RULE_RECIPIENT" as RULE_RECIPIENT {
+  *recipientId : string <<PK>>
+  *ruleId : string <<FK>>
+  userId : string <<FK>>
+  contactId : string <<FK>>
+}
+
+entity "NOTIFICATION" as NOTIFICATION {
+  *notificationId : string <<PK>>
+  userId : string <<FK>>
+  contactId : string <<FK>>
+  invoiceId : string <<FK>>
+  customerId : string <<FK>>
+  commentId : string <<FK>>
+  requestId : string <<FK>>
+  ruleId : string <<FK>>
+  *templateId : string <<FK>>
+  *eventKey : string
+  *deduplicationKey : string <<UK>>
+  *channel : string
+  *status : NotificationStatus
+  *scheduledAt : datetime
+  sentAt : datetime
+  *attemptCount : int
+  nextRetryAt : datetime
+  lastError : text
+  recipientSnapshot : json
+}
+
+entity "NOTIFICATION_ATTEMPT" as NOTIFICATION_ATTEMPT {
+  *attemptId : string <<PK>>
+  *notificationId : string <<FK>>
+  *attemptedAt : datetime
+  *status : string
+  providerMessageId : string
+  error : text
+}
+
+entity "COMMENT" as COMMENT {
+  *commentId : string <<PK>>
+  *invoiceId : string <<FK>>
+  *userId : string <<FK>>
+  *text : text
+  *createdAt : datetime
+}
+
+entity "COMMENT_MENTION" as COMMENT_MENTION {
+  *commentId : string <<PK, FK>>
+  *userId : string <<PK, FK>>
+}
+entity "CANCELLATION_REQUEST" as CANCELLATION_REQUEST <<reference>> {
+  *requestId : string <<PK>>
+}
+
+entity "CONTACT" as CONTACT <<reference>> {
+  *contactId : string <<PK>>
+}
+
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+
+entity "INVOICE" as INVOICE <<reference>> {
+  *invoiceId : string <<PK>>
+}
+INVOICE ||--o{ COMMENT
+COMMENT ||--o{ COMMENT_MENTION
+NOTIFICATION_TEMPLATE ||--o{ NOTIFICATION_RULE
+NOTIFICATION_RULE ||--o{ RULE_RECIPIENT
+CONTACT |o--o{ RULE_RECIPIENT
+CONTACT |o--o{ NOTIFICATION
+INVOICE |o--o{ NOTIFICATION
+CUSTOMER |o--o{ NOTIFICATION
+COMMENT |o--o{ NOTIFICATION
+CANCELLATION_REQUEST |o--o{ NOTIFICATION
+NOTIFICATION_RULE |o--o{ NOTIFICATION
+NOTIFICATION_TEMPLATE ||--o{ NOTIFICATION
+NOTIFICATION ||--o{ NOTIFICATION_ATTEMPT
+@enduml

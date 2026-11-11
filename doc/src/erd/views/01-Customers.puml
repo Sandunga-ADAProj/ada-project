@@ -1,0 +1,93 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Customers and Calendar
+entity "CUSTOMER" as CUSTOMER {
+  *customerId : string <<PK>>
+  *commercialName : string
+  tradingName : string
+  *legalName : string
+  taxId : string
+  taxAddress : string
+  *country : string
+  *currency : char(3)
+  *companyEmail : string
+  emailVerifiedAt : datetime
+  *calendarId : string <<FK>>
+  *status : CustomerStatus
+  *standing : AccountStanding
+  *version : int
+}
+
+entity "CONTACT" as CONTACT {
+  *contactId : string <<PK>>
+  *customerId : string <<FK>>
+  name : string
+  email : string
+  phone : string
+  *isPrimary : boolean
+  *isBillingContact : boolean
+  *state : ContactState
+  anonymizedAt : datetime
+}
+
+entity "CUSTOMER_TAG" as CUSTOMER_TAG {
+  *tagId : string <<PK>>
+  *name : string <<UK>>
+}
+
+entity "CUSTOMER_TAG_ASSIGNMENT" as CUSTOMER_TAG_ASSIGNMENT {
+  *customerId : string <<PK, FK>>
+  *tagId : string <<PK, FK>>
+}
+
+entity "BUSINESS_CALENDAR" as BUSINESS_CALENDAR {
+  *calendarId : string <<PK>>
+  *name : string
+  *region : string
+  *timezone : string
+  *workingWeekdays : string
+}
+
+entity "CALENDAR_EXCEPTION" as CALENDAR_EXCEPTION {
+  *calendarId : string <<PK, FK>>
+  *date : date <<PK>>
+  *isWorkingDay : boolean
+  *description : string
+}
+
+entity "CONTACT_CONSENT" as CONTACT_CONSENT {
+  *consentId : string <<PK>>
+  *contactId : string <<FK>>
+  *purpose : string
+  *grantedAt : datetime
+  withdrawnAt : datetime
+  *evidenceRef : string
+}
+
+entity "EMAIL_VERIFICATION" as EMAIL_VERIFICATION {
+  *verificationId : string <<PK>>
+  userId : string <<FK>>
+  customerId : string <<FK>>
+  *targetEmail : string
+  *tokenHash : string <<UK>>
+  *expiresAt : datetime
+  consumedAt : datetime
+}
+CUSTOMER |o--o{ EMAIL_VERIFICATION
+BUSINESS_CALENDAR ||--o{ CUSTOMER
+CUSTOMER ||--o{ CONTACT
+CUSTOMER ||--o{ CUSTOMER_TAG_ASSIGNMENT
+CUSTOMER_TAG ||--o{ CUSTOMER_TAG_ASSIGNMENT
+BUSINESS_CALENDAR ||--o{ CALENDAR_EXCEPTION
+CONTACT ||--o{ CONTACT_CONSENT
+@enduml

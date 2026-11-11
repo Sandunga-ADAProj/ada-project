@@ -1,0 +1,139 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Invoicing and Documents
+entity "INVOICE" as INVOICE {
+  *invoiceId : string <<PK>>
+  invoiceNumber : string <<UK>>
+  *customerId : string <<FK>>
+  subscriptionId : string <<FK>>
+  responsibleUserId : string <<FK>>
+  createdByUserId : string <<FK>>
+  *financialPeriodId : string <<FK>>
+  *type : InvoiceType
+  *status : InvoiceStatus
+  *createdAt : datetime
+  invoiceDate : date
+  issuedAt : datetime
+  dueDate : date
+  billingCycleStart : date
+  billingCycleEnd : date
+  *creationKey : string <<UK>>
+  issuanceKey : string <<UK>>
+  currency : char(3)
+  fiscalSnapshot : json
+  subtotal : decimal(19,4)
+  vatAmount : decimal(19,4)
+  total : decimal(19,4)
+  *version : int
+}
+
+entity "INVOICE_LINE" as INVOICE_LINE {
+  *invoiceLineId : string <<PK>>
+  *invoiceId : string <<FK>>
+  *position : int
+  *description : string
+  *quantity : decimal(19,4)
+  *unitPrice : decimal(19,4)
+  *taxRate : decimal(9,6)
+}
+
+entity "FINANCIAL_PERIOD" as FINANCIAL_PERIOD {
+  *financialPeriodId : string <<PK>>
+  *startDate : date
+  *endDate : date
+  *locked : boolean
+  lockedByUserId : string <<FK>>
+  lockedAt : datetime
+}
+
+entity "INVOICE_SEQUENCE" as INVOICE_SEQUENCE {
+  *series : string <<PK>>
+  *year : int <<PK>>
+  *nextNumber : bigint
+}
+
+entity "PERIOD_OVERRIDE" as PERIOD_OVERRIDE {
+  *overrideId : string <<PK>>
+  *financialPeriodId : string <<FK>>
+  *invoiceId : string <<FK>>
+  *operation : OverrideOperation
+  *requestedByUserId : string <<FK>>
+  authorizedByUserId : string <<FK>>
+  *reason : string
+  *status : ApprovalStatus
+  *requestedAt : datetime
+  decidedAt : datetime
+  consumedAt : datetime
+}
+
+entity "DOCUMENT" as DOCUMENT {
+  *documentId : string <<PK>>
+  *storageKey : string <<UK>>
+  *originalName : string
+  *mimeType : string
+  *sizeBytes : bigint
+  *sha256 : string
+  *createdAt : datetime
+  uploadedByUserId : string <<FK>>
+  *kind : string
+  *scanStatus : string
+  retainUntil : date
+  *immutable : boolean
+}
+
+entity "CUSTOMER_DOCUMENT" as CUSTOMER_DOCUMENT {
+  *customerId : string <<PK, FK>>
+  *documentId : string <<PK, FK>>
+}
+
+entity "INVOICE_DOCUMENT" as INVOICE_DOCUMENT {
+  *invoiceId : string <<PK, FK>>
+  *documentId : string <<PK, FK>>
+  *purpose : string
+}
+
+entity "ACCOUNTING_EXPORT_PACKAGE" as ACCOUNTING_EXPORT_PACKAGE {
+  *exportId : string <<PK>>
+  *financialPeriodId : string <<FK>>
+  *requestedByUserId : string <<FK>>
+  documentId : string <<FK>>
+  *format : string
+  *filters : json
+  *version : int
+  *status : JobStatus
+  *requestedAt : datetime
+  generatedAt : datetime
+  *isOutdated : boolean
+  *sourceRevision : string
+  *isBulk : boolean
+}
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+
+entity "SUBSCRIPTION" as SUBSCRIPTION <<reference>> {
+  *subscriptionId : string <<PK>>
+}
+CUSTOMER ||--o{ INVOICE
+SUBSCRIPTION |o--o{ INVOICE
+FINANCIAL_PERIOD ||--o{ INVOICE
+INVOICE ||--o{ INVOICE_LINE
+FINANCIAL_PERIOD ||--o{ PERIOD_OVERRIDE
+INVOICE ||--o{ PERIOD_OVERRIDE
+CUSTOMER ||--o{ CUSTOMER_DOCUMENT
+DOCUMENT ||--o{ CUSTOMER_DOCUMENT
+INVOICE ||--o{ INVOICE_DOCUMENT
+DOCUMENT ||--o{ INVOICE_DOCUMENT
+FINANCIAL_PERIOD ||--o{ ACCOUNTING_EXPORT_PACKAGE
+DOCUMENT |o--o{ ACCOUNTING_EXPORT_PACKAGE
+@enduml

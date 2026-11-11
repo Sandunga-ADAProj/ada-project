@@ -1,0 +1,99 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Configuration and Operations
+entity "BUSINESS_RULE" as BUSINESS_RULE {
+  *ruleId : string <<PK>>
+  *name : string
+  *version : int
+  *value : json
+  *valueType : string
+  *validFrom : datetime
+  validUntil : datetime
+  *changedByUserId : string <<FK>>
+  *changedAt : datetime
+  *enabled : boolean
+}
+
+entity "AUDIT_EVENT" as AUDIT_EVENT {
+  *auditId : string <<PK>>
+  actorUserId : string <<FK>>
+  *actorType : string
+  *entityType : string
+  *entityId : string
+  customerId : string <<FK>>
+  *action : string
+  *occurredAt : datetime
+  reason : text
+  changes : json
+  correlationId : string
+}
+
+entity "USER_BOOKMARK" as USER_BOOKMARK {
+  *bookmarkId : string <<PK>>
+  *userId : string <<FK>>
+  customerId : string <<FK>>
+  invoiceId : string <<FK>>
+  contactId : string <<FK>>
+  *createdAt : datetime
+}
+
+entity "USER_RECENT" as USER_RECENT {
+  *recentId : string <<PK>>
+  *userId : string <<FK>>
+  customerId : string <<FK>>
+  invoiceId : string <<FK>>
+  contactId : string <<FK>>
+  *lastViewedAt : datetime
+}
+
+entity "BACKGROUND_JOB" as BACKGROUND_JOB {
+  *jobId : string <<PK>>
+  *type : string
+  requestedByUserId : string <<FK>>
+  *status : JobStatus
+  *createdAt : datetime
+  startedAt : datetime
+  finishedAt : datetime
+  *idempotencyKey : string <<UK>>
+  result : json
+  error : text
+}
+
+entity "JOB_ITEM" as JOB_ITEM {
+  *itemId : string <<PK>>
+  *jobId : string <<FK>>
+  *entityType : string
+  *entityId : string
+  *status : JobStatus
+  error : text
+}
+entity "CONTACT" as CONTACT <<reference>> {
+  *contactId : string <<PK>>
+}
+
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+
+entity "INVOICE" as INVOICE <<reference>> {
+  *invoiceId : string <<PK>>
+}
+CUSTOMER |o--o{ AUDIT_EVENT
+CUSTOMER |o--o{ USER_BOOKMARK
+INVOICE |o--o{ USER_BOOKMARK
+CONTACT |o-up-o{ USER_BOOKMARK
+CUSTOMER |o--o{ USER_RECENT
+INVOICE |o--o{ USER_RECENT
+CONTACT |o--o{ USER_RECENT
+BACKGROUND_JOB ||--o{ JOB_ITEM
+@enduml

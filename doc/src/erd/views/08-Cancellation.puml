@@ -1,0 +1,34 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Account Cancellation
+entity "CANCELLATION_REQUEST" as CANCELLATION_REQUEST {
+  *requestId : string <<PK>>
+  *customerId : string <<FK>>
+  *requestedByUserId : string <<FK>>
+  processedByUserId : string <<FK>>
+  *requestedAt : datetime
+  *requestedEffectiveDate : date
+  effectiveDate : date
+  *reason : string
+  *balanceAtRequest : decimal(19,4)
+  *balanceCurrency : char(3)
+  *status : ApprovalStatus
+  processedAt : datetime
+  decisionReason : string
+  executedAt : datetime
+}
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+CUSTOMER ||--o{ CANCELLATION_REQUEST
+@enduml

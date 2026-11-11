@@ -1,0 +1,59 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Assignments, Delegations and Substitutions
+entity "CUSTOMER_ASSIGNMENT" as CUSTOMER_ASSIGNMENT {
+  *assignmentId : string <<PK>>
+  *userId : string <<FK>>
+  *customerId : string <<FK>>
+  *assignedByUserId : string <<FK>>
+  *validFrom : datetime
+  validUntil : datetime
+}
+
+entity "ACCOUNT_DELEGATION" as ACCOUNT_DELEGATION {
+  *delegationId : string <<PK>>
+  *assignmentId : string <<FK>>
+  *delegatedToUserId : string <<FK>>
+  *authorizedByUserId : string <<FK>>
+  *startAt : datetime
+  *validUntil : datetime
+  revokedAt : datetime
+  *status : DelegationStatus
+}
+
+entity "APPROVER_SUBSTITUTION" as APPROVER_SUBSTITUTION {
+  *substitutionId : string <<PK>>
+  *primaryUserId : string <<FK>>
+  *substituteUserId : string <<FK>>
+  *authorizedByUserId : string <<FK>>
+  *startAt : datetime
+  *validUntil : datetime
+  revokedAt : datetime
+}
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+
+entity "USER" as USER <<reference>> {
+  *userId : string <<PK>>
+}
+USER ||--o{ CUSTOMER_ASSIGNMENT
+CUSTOMER ||--o{ CUSTOMER_ASSIGNMENT
+USER ||--o{ CUSTOMER_ASSIGNMENT
+CUSTOMER_ASSIGNMENT ||--o{ ACCOUNT_DELEGATION
+USER ||--o{ ACCOUNT_DELEGATION
+USER ||--o{ ACCOUNT_DELEGATION
+USER ||-left-o{ APPROVER_SUBSTITUTION
+USER ||-down-o{ APPROVER_SUBSTITUTION
+USER ||-right-o{ APPROVER_SUBSTITUTION
+@enduml

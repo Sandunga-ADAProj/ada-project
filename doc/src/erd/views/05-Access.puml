@@ -1,0 +1,100 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Roles and Permissions
+entity "USER" as USER {
+  *userId : string <<PK>>
+  *email : string <<UK>>
+  *passwordHash : string
+  *state : UserState
+  *userType : UserType
+  emailVerifiedAt : datetime
+  guestExpiresAt : datetime
+  *failedLoginCount : int
+  blockedUntil : datetime
+  *version : int
+}
+
+entity "PREFERENCES" as PREFERENCES {
+  *userId : string <<PK, FK>>
+  language : string
+  theme : string
+  fontSize : string
+  contrast : string
+  defaultFilters : json
+  defaultViews : json
+  notificationDisplay : json
+}
+
+entity "ROLE" as ROLE {
+  *roleId : string <<PK>>
+  *name : string <<UK>>
+  *isSystemRole : boolean
+}
+
+entity "PERMISSION" as PERMISSION {
+  *permissionId : string <<PK>>
+  *code : string <<UK>>
+}
+
+entity "USER_ROLE" as USER_ROLE {
+  *userId : string <<PK, FK>>
+  *roleId : string <<PK, FK>>
+}
+
+entity "ROLE_PERMISSION" as ROLE_PERMISSION {
+  *roleId : string <<PK, FK>>
+  *permissionId : string <<PK, FK>>
+}
+
+entity "SECTION" as SECTION {
+  *sectionId : string <<PK>>
+  *name : string <<UK>>
+}
+
+entity "ACCESS_GRANT" as ACCESS_GRANT {
+  *grantId : string <<PK>>
+  *userId : string <<FK>>
+  *permissionId : string <<FK>>
+  customerId : string <<FK>>
+  sectionId : string <<FK>>
+  *grantedByUserId : string <<FK>>
+  *validFrom : datetime
+  validUntil : datetime
+  revokedAt : datetime
+}
+
+entity "USER_SESSION" as USER_SESSION {
+  *sessionId : string <<PK>>
+  *userId : string <<FK>>
+  *tokenHash : string <<UK>>
+  *createdAt : datetime
+  *lastActivityAt : datetime
+  *expiresAt : datetime
+  revokedAt : datetime
+}
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+USER ||--o| PREFERENCES
+USER ||--o{ USER_ROLE
+ROLE ||--o{ USER_ROLE
+ROLE ||--o{ ROLE_PERMISSION
+PERMISSION ||--o{ ROLE_PERMISSION
+USER ||--o{ ACCESS_GRANT
+PERMISSION ||--o{ ACCESS_GRANT
+CUSTOMER |o--o{ ACCESS_GRANT
+SECTION |o--o{ ACCESS_GRANT
+USER ||--o{ ACCESS_GRANT
+USER ||--o{ USER_SESSION
+ROLE_PERMISSION -[hidden]right- ACCESS_GRANT
+@enduml

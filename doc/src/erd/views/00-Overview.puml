@@ -1,0 +1,68 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Domain Overview
+entity "USER" as USER {
+  *userId : string <<PK>>
+}
+
+entity "CUSTOMER" as CUSTOMER {
+  *customerId : string <<PK>>
+}
+
+entity "CONTACT" as CONTACT {
+  *contactId : string <<PK>>
+}
+
+entity "BILLING_PLAN" as BILLING_PLAN {
+  *billingPlanId : string <<PK>>
+}
+
+entity "SUBSCRIPTION" as SUBSCRIPTION {
+  *subscriptionId : string <<PK>>
+}
+
+entity "INVOICE" as INVOICE {
+  *invoiceId : string <<PK>>
+}
+
+entity "INVOICE_LINE" as INVOICE_LINE {
+  *invoiceLineId : string <<PK>>
+}
+
+entity "FINANCIAL_PERIOD" as FINANCIAL_PERIOD {
+  *financialPeriodId : string <<PK>>
+}
+
+entity "BANK_TRANSACTION" as BANK_TRANSACTION {
+  *bankTransactionId : string <<PK>>
+}
+
+entity "PAYMENT_ALLOCATION" as PAYMENT_ALLOCATION {
+  *allocationId : string <<PK>>
+}
+
+entity "CANCELLATION_REQUEST" as CANCELLATION_REQUEST {
+  *requestId : string <<PK>>
+}
+CUSTOMER ||--o{ CONTACT
+CUSTOMER ||--o{ SUBSCRIPTION
+BILLING_PLAN ||--o{ SUBSCRIPTION
+CUSTOMER ||--o{ INVOICE
+SUBSCRIPTION |o--o{ INVOICE
+FINANCIAL_PERIOD ||--o{ INVOICE
+INVOICE ||--o{ INVOICE_LINE
+BANK_TRANSACTION ||--o{ PAYMENT_ALLOCATION
+INVOICE ||--o{ PAYMENT_ALLOCATION
+CUSTOMER ||--o{ CANCELLATION_REQUEST
+USER }o--o{ CUSTOMER
+@enduml

@@ -1,0 +1,113 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Subscriptions and Pricing
+entity "BILLING_PLAN" as BILLING_PLAN {
+  *billingPlanId : string <<PK>>
+  *name : string
+  *enabled : boolean
+}
+
+entity "PLAN_RATE" as PLAN_RATE {
+  *rateId : string <<PK>>
+  *billingPlanId : string <<FK>>
+  *version : int
+  *revenueMin : decimal(19,4)
+  revenueMax : decimal(19,4)
+  *currency : char(3)
+  *basePrice : decimal(19,4)
+  *minPrice : decimal(19,4)
+  *maxPrice : decimal(19,4)
+  *validFrom : date
+  validUntil : date
+}
+
+entity "SUBSCRIPTION" as SUBSCRIPTION {
+  *subscriptionId : string <<PK>>
+  *customerId : string <<FK>>
+  *billingPlanId : string <<FK>>
+  *startDate : date
+  endDate : date
+  *billingAnchorDay : int
+  *paymentTermsDays : int
+  *status : SubscriptionStatus
+  *version : int
+}
+
+entity "SUBSCRIPTION_PRICE" as SUBSCRIPTION_PRICE {
+  *priceId : string <<PK>>
+  *subscriptionId : string <<FK>>
+  *rateId : string <<FK>>
+  *price : decimal(19,4)
+  *currency : char(3)
+  *validFrom : date
+  validUntil : date
+  *changedByUserId : string <<FK>>
+  *changedAt : datetime
+  *reason : string
+}
+
+entity "COMMERCIAL_EXCEPTION" as COMMERCIAL_EXCEPTION {
+  *exceptionId : string <<PK>>
+  *subscriptionId : string <<FK>>
+  *proposedByUserId : string <<FK>>
+  reviewedByUserId : string <<FK>>
+  *type : ExceptionType
+  *value : decimal(19,4)
+  *valueUnit : string
+  *reason : string
+  *startDate : date
+  *endDate : date
+  *status : ApprovalStatus
+  *proposedAt : datetime
+  reviewedAt : datetime
+  decisionReason : string
+}
+
+entity "PRICE_REVIEW" as PRICE_REVIEW {
+  *reviewId : string <<PK>>
+  *subscriptionId : string <<FK>>
+  *rateId : string <<FK>>
+  exceptionId : string <<FK>>
+  *reviewYear : int
+  *dataSource : string
+  *previousPrice : decimal(19,4)
+  proposedPrice : decimal(19,4)
+  *reason : string
+  *status : ApprovalStatus
+  reviewedByUserId : string <<FK>>
+  reviewedAt : datetime
+  effectiveFrom : date
+}
+
+entity "MONTHLY_TARGET" as MONTHLY_TARGET {
+  *targetId : string <<PK>>
+  *month : date
+  *currency : char(3)
+  *billingTarget : decimal(19,4)
+  *collectionTarget : decimal(19,4)
+  *updatedByUserId : string <<FK>>
+  *updatedAt : datetime
+}
+entity "CUSTOMER" as CUSTOMER <<reference>> {
+  *customerId : string <<PK>>
+}
+BILLING_PLAN ||--o{ PLAN_RATE
+CUSTOMER ||--o{ SUBSCRIPTION
+BILLING_PLAN ||--o{ SUBSCRIPTION
+SUBSCRIPTION ||--o{ SUBSCRIPTION_PRICE
+PLAN_RATE ||--o{ SUBSCRIPTION_PRICE
+SUBSCRIPTION ||--o{ COMMERCIAL_EXCEPTION
+SUBSCRIPTION ||--o{ PRICE_REVIEW
+PLAN_RATE ||--o{ PRICE_REVIEW
+COMMERCIAL_EXCEPTION |o--o{ PRICE_REVIEW
+@enduml

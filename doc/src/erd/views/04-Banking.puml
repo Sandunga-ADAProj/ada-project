@@ -1,0 +1,63 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam shadowing false
+skinparam entity {
+ BackgroundColor #FFFFFF
+ BorderColor #2B3E6A
+ BackgroundColor<<reference>> #EEF2F6
+ BorderColor<<reference>> #94A3B8
+}
+title Banking and Reconciliation
+entity "BANK_CONNECTION" as BANK_CONNECTION {
+  *connectionId : string <<PK>>
+  *provider : string
+  *externalAccountId : string
+  *credentialSecretRef : string
+  checkpoint : string
+  lastSuccessfulSyncAt : datetime
+  *simulated : boolean
+}
+
+entity "BANK_TRANSACTION" as BANK_TRANSACTION {
+  *bankTransactionId : string <<PK>>
+  *connectionId : string <<FK>>
+  *externalTransactionId : string
+  reference : string
+  *amount : decimal(19,4)
+  *currency : char(3)
+  *valueDate : date
+  metadata : json
+  *status : BankTransactionStatus
+  *version : int
+}
+
+entity "PAYMENT_ALLOCATION" as PAYMENT_ALLOCATION {
+  *allocationId : string <<PK>>
+  *bankTransactionId : string <<FK>>
+  *invoiceId : string <<FK>>
+  *amountAllocated : decimal(19,4)
+  *allocatedAt : datetime
+  allocatedByUserId : string <<FK>>
+  *origin : string
+  *idempotencyKey : string <<UK>>
+}
+
+entity "PAYMENT_REVIEW" as PAYMENT_REVIEW {
+  *reviewId : string <<PK>>
+  *bankTransactionId : string <<FK>>
+  *reviewedByUserId : string <<FK>>
+  *decision : string
+  *reason : string
+  *reviewedAt : datetime
+}
+entity "INVOICE" as INVOICE <<reference>> {
+  *invoiceId : string <<PK>>
+}
+BANK_CONNECTION ||--o{ BANK_TRANSACTION
+BANK_TRANSACTION ||--o{ PAYMENT_ALLOCATION
+INVOICE ||--o{ PAYMENT_ALLOCATION
+BANK_TRANSACTION ||--o{ PAYMENT_REVIEW
+@enduml
