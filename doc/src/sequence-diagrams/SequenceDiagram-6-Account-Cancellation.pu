@@ -24,8 +24,8 @@ skinparam note {
 
 title Sequence Diagram - Account Cancellation Request & Billing Freeze Workflow (UC-25, UC-26, FR-5.1, FR-5.2, FR-5.3, FR-5.4)
 
-actor Staff as "staffUser : Base User"
-actor Admin as "adminUser : Administrator"
+actor Staff as "staffUser : User"
+actor Admin as "adminUser : Admin"
 
 box "Presentation Layer" #F5F7FA
     ' CustomerManagementView — ComponentsDiagram (<<boundary>>, CustomerSubscriptionAPI)
@@ -51,90 +51,163 @@ end box
 
 autonumber "<b>[00]</b>"
 
+
 == Step 1: Cancellation Request Submission (UC-25, FR-5.3) ==
 
-Staff -> View : onRequestCancellationClicked(customerId, reason="Business Restructuring")
+Staff -> View : onRequestCancellationClicked(customerId, reason)
 activate View
 
-' View → CustomerAndSubscriptionController via CustomerSubscriptionAPI (ComponentsDiagram)
-View -> Ctrl : handleCancellationWorkflow(staffUser, targetCustomer, "Business Restructuring")
+View -> Ctrl : handleCancellationWorkflow(staffUser, targetCustomer, reason)
 activate Ctrl
 
-' Outstanding balance is a computed property on Customer, keeping Invoice cross-domain access encapsulated
-Ctrl -> Customer : getOutstandingBalance()
-activate Customer
-Customer --> Ctrl : return balanceAmount (1,250.00 EUR)
-deactivate Customer
+Ctrl -> Ctrl : validateCancellationRequest(staffUser, targetCustomer)
 
-create Req
-Ctrl --> Req : <<create>> (requestDate=today, reason="Business Restructuring", balance=1250.00, status=PENDING)
-activate Req
-Req --> Ctrl : return cancelRequest
-deactivate Req
+alt Request invalid or user not authorized
 
-ref over Ctrl, Req : ref DS-BASE: Record Cancellation Request in Audit Log (FR-5.3)
+    Ctrl --> View : Request rejected
+    View --> Staff : Display validation error
 
-Ctrl --> View : renderCancellationSubmitted(cancelRequest)
-deactivate Ctrl
+else Request permitted
 
-View --> Staff : Displays cancellation request status as PENDING
-deactivate View
-
-== Step 2: Administrator Processing & Service Freeze (UC-26, FR-5.1, FR-5.2, FR-5.4) ==
-
-Admin -> View : onProcessCancellationClicked(requestId, approved=true)
-activate View
-
-View -> Ctrl : processCancellationRequest(adminUser, cancelRequest, true)
-activate Ctrl
-
-alt approved == true (Cancellation Approved)
-    Ctrl -> Req : approve()
-    activate Req
-    Req -> Req : setStatus(APPROVED)
-    Req --> Ctrl : return void
-    deactivate Req
-
-    ' Freeze recurring generation (FR-5.1)
-    Ctrl -> Sub : setStatus(CANCELLED)
-    activate Sub
-    note over Sub: Recurring invoice generation is frozen immediately\nSubscription remains in records for auditing
-    Sub --> Ctrl : return true
-    deactivate Sub
-
-    Ctrl -> Customer : setStatus(CANCELLED)
+    Ctrl -> Customer : getOutstandingBalance()
     activate Customer
-    Customer --> Ctrl : return void
+    Customer --> Ctrl : outstandingBalance
     deactivate Customer
 
-    opt cancelRequest.outstandingBalance > 0 (FR-5.2)
-        ' Historical invoices remain active until settled; balance is tracked on Customer.
-        ' Invoice Management domain enforces this through its own lifecycle rules.
-        note over Customer: Historical unpaid invoices and automated overdue\nreminders remain active until the debt is settled
-        Ctrl -> Customer : setStanding(OVERDUE)
-        activate Customer
-        Customer --> Ctrl : return void
-        deactivate Customer
-    end
-
-    ref over Ctrl, Customer : ref DS-BASE: Cancellation Decision Notification & Audit Trail (FR-5.4)
-
-    Ctrl --> View : renderCancellationProcessed(true)
-    View --> Admin : Displays cancellation processed and billing successfully frozen
-else approved == false (Cancellation Rejected)
-    Ctrl -> Req : reject()
+    create Req
+    Ctrl -> Req : <<create>> (requestDate=today, reason, outstandingBalance, status=PENDING)
     activate Req
-    Req -> Req : setStatus(REJECTED)
-    Req --> Ctrl : return void
+    Req --> Ctrl : cancelRequest
     deactivate Req
 
-    ref over Ctrl, Req : ref DS-BASE: Cancellation Rejection Alert
+    ref over Ctrl, Req : DS-BASE: Notify Administrator & Audit Cancellation Request (FR-5.3.1)
 
-    Ctrl --> View : renderCancellationProcessed(false)
-    View --> Admin : Displays cancellation request rejected
+    Ctrl --> View : cancelRequest
+    View -> View : renderCancellationSubmitted(cancelRequest)
+    View --> Staff : Display cancellation request as PENDING
+
 end
 
 deactivate Ctrl
 deactivate View
+
+
+== Step 2: Administrator Review & Decision (UC-26, FR-5.3) ==
+
+opt Valid pending cancellation request exists
+
+    Admin -> View : onReviewCancellationClicked(requestId)
+    activate View
+
+    View -> Ctrl : getCancellationReview(adminUser, cancelRequest)
+    activate Ctrl
+
+    Ctrl -> Customer : getOutstandingBalance()
+    activate Customer
+    Customer --> Ctrl : outstandingBalance
+    deactivate Customer
+
+    Ctrl -> Ctrl : prepareMinimumAuthorizedAccountDetails(targetCustomer)
+
+    Ctrl --> View : cancellationReviewSummary
+    deactivate Ctrl
+
+    View -> View : renderCancellationReview(cancellationReviewSummary)
+    View --> Admin : Display request and outstanding obligations
+
+    Admin -> View : onProcessCancellationClicked(requestId, approved)
+
+    View -> Ctrl : processCancellationRequest(adminUser, cancelRequest, approved)
+    activate Ctrl
+
+    Ctrl -> Ctrl : validateCancellationDecision(adminUser, cancelRequest)
+
+    alt Administrator unauthorized or request not PENDING
+
+        Ctrl --> View : Decision rejected
+        View --> Admin : Display validation error
+
+    else Authorized and approved
+
+        Ctrl -> Req : approve()
+        activate Req
+        Req --> Ctrl : status=APPROVED
+        deactivate Req
+
+        == Step 3: Freeze Recurring Billing (FR-5.1) ==
+
+        Ctrl -> Customer : getSubscriptions()
+        activate Customer
+        Customer --> Ctrl : subscriptions
+        deactivate Customer
+
+        loop For each ACTIVE or PENDING_ACTIVATION subscription
+
+            Ctrl -> Sub : setStatus(CANCELLED)
+            activate Sub
+
+            note over Sub
+                Recurring invoice generation stops.
+                Subscription history is preserved.
+            end note
+
+            Sub --> Ctrl : completed
+            deactivate Sub
+
+        end
+
+        Ctrl -> Customer : setStatus(CANCELLED)
+        activate Customer
+        Customer --> Ctrl : completed
+        deactivate Customer
+
+        == Step 4: Historical Debt & Record Retention (FR-5.2, FR-5.4) ==
+
+        opt Outstanding balance is greater than zero
+
+            note over Customer
+                Historical unpaid invoices remain valid.
+                Existing overdue notification workflows
+                continue until the debt is resolved.
+                No historical invoices are deleted.
+            end note
+
+        end
+
+        note over Customer
+            Company records and accounting history
+            are retained according to legal requirements.
+        end note
+
+        ref over Ctrl, Customer : DS-BASE: Cancellation Decision Notification & Audit
+
+        Ctrl --> View : Cancellation approved
+        View -> View : renderCancellationProcessed(true)
+        View --> Admin : Display cancellation confirmation
+
+    else Authorized and rejected
+
+        Ctrl -> Req : reject()
+        activate Req
+        Req --> Ctrl : status=REJECTED
+        deactivate Req
+
+        note over Sub
+            Subscription status remains unchanged.
+            Recurring billing continues normally.
+        end note
+
+        ref over Ctrl, Req : DS-BASE: Cancellation Rejection Notification & Audit
+
+        Ctrl --> View : Cancellation rejected
+        View -> View : renderCancellationProcessed(false)
+        View --> Admin : Display rejection confirmation
+
+    end
+
+    deactivate Ctrl
+    deactivate View
+
+end
 
 @enduml

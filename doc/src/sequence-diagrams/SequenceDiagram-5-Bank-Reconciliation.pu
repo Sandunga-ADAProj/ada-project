@@ -22,9 +22,9 @@ skinparam note {
     FontName monospace
 }
 
-title Sequence Diagram - Bank Transaction Ingestion & Automated Reconciliation (UC-20, UC-21, UC-22, FR-3.1, FR-3.2, FR-3.3, FR-3.4)
-
-actor Admin as "adminUser : Administrator"
+title Sequence Diagram - Bank Transaction Ingestion & Automated Reconciliation (UC-20, UC-21, UC-22, FR-3.1, FR-3.2, FR-3.3, NFR-2.10)
+actor Admin as "adminUser : Admin"
+actor Scheduler as "reconciliationScheduler : SystemDaemon"
 
 box "Presentation Layer" #F5F7FA
     participant View as "reconcileView : InvoicingAndReconciliationView" <<boundary>>
@@ -39,6 +39,7 @@ box "Domain Layer" #FFFFFF
     participant Tx as "bankTx : BankTransaction"
     participant Invoice as "matchedInvoice : Invoice"
     participant Alloc as "paymentAlloc : PaymentAllocation"
+    participant ManualAlloc as "manualPaymentAlloc : PaymentAllocation"
     participant Cust as "customerAccount : Customer"
 end box
 
@@ -50,59 +51,126 @@ end box
 
 autonumber "<b>[00]</b>"
 
-== Step 1: External Banking API Transaction Ingestion (UC-21, FR-3.1, FR-3.4) ==
+
+== Step 1: Banking API Transaction Ingestion (UC-21, FR-3.1) ==
+
+Scheduler -> Ctrl : runAutomatedReconciliation()
+activate Ctrl
 
 Ctrl -> Gateway : fetchTransactionsSince(checkpointTimestamp)
-activate Ctrl
 activate Gateway
 
-' Polymorphic dispatch across architecture boundary
 Gateway -> Adapter : fetchTransactionsSince(checkpointTimestamp)
 activate Adapter
-note over Adapter: Queries external banking API\nSupports Simulated Stripe Mode (FR-3.4)
-create Tx
-Adapter --> Tx : <<create>> (ref="INV-2026-042", amount=850.00, valueDate=today, status="PENDING")
-Adapter --> Gateway : return List<BankTransaction>
-deactivate Adapter
 
-Gateway --> Ctrl : return transactionsList
-deactivate Gateway
+note over Adapter
+    Retrieves bank transactions.
+    Supports simulated Stripe mode (NFR-2.10).
+end note
 
-== Step 2: Automated Matching & Account Standing Update (UC-20, FR-3.2, FR-3.3) ==
+alt Banking API unavailable or returns an error
 
-loop for each bankTx in transactionsList
-    Ctrl -> Ctrl : matchByReferenceAndAmount(bankTx.reference, bankTx.amount)
-    
-    alt Exact Match Found (Reference & Amount Validated)
-        create Alloc
-        Ctrl --> Alloc : <<create>> (allocatedAmount=850.00, allocationDate=today)
-        activate Alloc
-        Alloc --> Ctrl : return paymentAlloc
-        deactivate Alloc
+    Adapter --> Gateway : integrationError
+    deactivate Adapter
 
-        Ctrl -> Invoice : changeStatus(PAID)
-        activate Invoice
-        Invoice --> Ctrl : return true
-        deactivate Invoice
+    Gateway --> Ctrl : integrationError
+    deactivate Gateway
 
-        Ctrl -> Cust : setStanding(UP_TO_DATE)
-        activate Cust
-        Cust --> Ctrl : return void
-        deactivate Cust
+    ref over Ctrl, Gateway : DS-BASE: Banking Integration Error Alert (FR-4.2.2)
 
-        ref over Ctrl, Invoice : ref DS-BASE: Automated Payment Notification & Audit (FR-4.2.1)
-    else Ambiguous or Unmatched Transaction (FR-3.3 Protection)
-        Ctrl -> Tx : setStatus("UNMATCHED")
-        activate Tx
-        Tx --> Ctrl : return void
-        deactivate Tx
+else Transactions retrieved successfully
 
-        ref over Ctrl, Tx : ref DS-BASE: Alert Administrator of Unmatched Transaction (FR-4.2.2)
+    Adapter --> Gateway : transactionsList
+    deactivate Adapter
+
+    Gateway --> Ctrl : transactionsList
+    deactivate Gateway
+
+    == Step 2: Automated Payment Reconciliation (UC-20, FR-3.2, FR-3.3) ==
+
+    loop For each bankTx in transactionsList
+
+        Ctrl -> Ctrl : findMatchingInvoices(bankTx.reference, bankTx.amount, metadata)
+
+        alt Duplicate, ambiguous, delayed or unmatched transaction
+
+            Ctrl -> Tx : setStatus("UNMATCHED")
+            activate Tx
+            Tx --> Ctrl : completed
+            deactivate Tx
+
+            ref over Ctrl, Tx : DS-BASE: Alert Administrator of Unmatched Transaction (FR-4.2.2)
+
+        else Unique invoice match found
+
+            Ctrl -> Ctrl : remainingBalance = calculateRemainingBalance(matchedInvoice)
+
+            Ctrl -> Ctrl : validatePaymentAmount(bankTx, remainingBalance)
+
+            alt Payment invalid, already processed or exceeds remaining balance
+
+                Ctrl -> Tx : setStatus("UNMATCHED")
+                activate Tx
+                Tx --> Ctrl : completed
+                deactivate Tx
+
+                ref over Ctrl, Tx : DS-BASE: Payment Exception Audit & Alert
+
+            else Valid payment
+
+                Ctrl -> Ctrl : allocatePayment(bankTx, matchedInvoice, bankTx.amount)
+
+                create Alloc
+                Ctrl -> Alloc : <<create>> (bankTx, matchedInvoice, bankTx.amount, today)
+                activate Alloc
+                Alloc --> Ctrl : paymentAlloc
+                deactivate Alloc
+
+                Ctrl -> Tx : setStatus("MATCHED")
+                activate Tx
+                Tx --> Ctrl : completed
+                deactivate Tx
+
+                Ctrl -> Ctrl : remainingBalance = calculateRemainingBalance(matchedInvoice)
+
+                alt Remaining invoice balance is zero
+
+                    Ctrl -> Invoice : changeStatus(PAID)
+                    activate Invoice
+                    Invoice --> Ctrl : true
+                    deactivate Invoice
+
+                    opt Customer has no other overdue or unpaid invoices
+                        Ctrl -> Cust : setStanding(UP_TO_DATE)
+                        activate Cust
+                        Cust --> Ctrl : completed
+                        deactivate Cust
+                    end
+
+                    ref over Ctrl, Invoice : DS-BASE: Invoice Paid Notification & Audit (FR-4.2.1)
+
+                else Remaining invoice balance is greater than zero
+
+                    Ctrl -> Invoice : changeStatus(PARTIALLY_RECONCILED)
+                    activate Invoice
+                    Invoice --> Ctrl : true
+                    deactivate Invoice
+
+                    ref over Ctrl, Invoice : DS-BASE: Partial Payment Audit
+
+                end
+            end
+        end
     end
+
+    Ctrl -> Ctrl : updateTransactionCheckpoint()
+
 end
+
 deactivate Ctrl
 
-== Step 3: Manual Administrator Review & Resolution (UC-22) ==
+
+== Step 3: Manual Administrator Review & Resolution (UC-22, FR-3.3) ==
 
 Admin -> View : onResolveUnmatchedClicked(bankTxId, selectedInvoiceId)
 activate View
@@ -110,21 +178,66 @@ activate View
 View -> Ctrl : resolveUnmatchedTransaction(adminUser, bankTx, matchedInvoice)
 activate Ctrl
 
-Ctrl -> Alloc : allocatePayment(bankTx, matchedInvoice, bankTx.amount)
-activate Alloc
-Alloc --> Ctrl : return paymentAlloc
-deactivate Alloc
+Ctrl -> Ctrl : validateManualResolution(adminUser, bankTx, matchedInvoice)
 
-Ctrl -> Invoice : changeStatus(PAID)
-activate Invoice
-Invoice --> Ctrl : return true
-deactivate Invoice
+alt Transaction unmatched, administrator authorized and amount valid
 
-Ctrl --> View : renderUnmatchedPayments(remainingQueue)
+    Ctrl -> Ctrl : allocatePayment(bankTx, matchedInvoice, bankTx.amount)
+
+    create ManualAlloc
+    Ctrl -> ManualAlloc : <<create>> (bankTx, matchedInvoice, bankTx.amount, today)
+    activate ManualAlloc
+    ManualAlloc --> Ctrl : manualPaymentAlloc
+    deactivate ManualAlloc
+
+    Ctrl -> Tx : setStatus("MATCHED")
+    activate Tx
+    Tx --> Ctrl : completed
+    deactivate Tx
+
+    Ctrl -> Ctrl : remainingBalance = calculateRemainingBalance(matchedInvoice)
+
+    alt Remaining invoice balance is zero
+
+        Ctrl -> Invoice : changeStatus(PAID)
+        activate Invoice
+        Invoice --> Ctrl : true
+        deactivate Invoice
+
+        opt Customer has no other overdue or unpaid invoices
+            Ctrl -> Cust : setStanding(UP_TO_DATE)
+            activate Cust
+            Cust --> Ctrl : completed
+            deactivate Cust
+        end
+
+        ref over Ctrl, Invoice : DS-BASE: Invoice Paid Notification & Audit (FR-4.2.1)
+
+    else Remaining invoice balance is greater than zero
+
+        Ctrl -> Invoice : changeStatus(PARTIALLY_RECONCILED)
+        activate Invoice
+        Invoice --> Ctrl : true
+        deactivate Invoice
+
+        ref over Ctrl, Invoice : DS-BASE: Partial Payment Audit
+
+    end
+
+    Ctrl --> View : Resolution successful
+    View -> View : renderUnmatchedPayments(remainingQueue)
+    View --> Admin : Display successful reconciliation
+
+else Resolution not permitted
+
+    Ctrl --> View : Resolution rejected
+    View --> Admin : Display validation error
+
+end
+
 deactivate Ctrl
-
-View --> Admin : Displays transaction successfully reconciled
 deactivate View
+
 
 @enduml
 

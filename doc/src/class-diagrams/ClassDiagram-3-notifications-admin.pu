@@ -29,33 +29,102 @@ skinparam arrow {
 ' ==========================================
 package "com.invoicingsystem.presentation" {
     class SystemAdministrationView <<boundary>> {
+        + renderPricingConfiguration(plans: List<BillingPlan>): void
+        + renderFlaggedPricesQueue(reviews: List<PriceReview>): void
         + renderUserPermissions(): void
+        + onOverridePeriodClicked(period: FinancialPeriod, reason: String): void
+        + renderCustomRoles(roles: List<AccessRole>): void
+        + onCreateRoleClicked(name: String, permissions: Set<String>): void
+        + onAssignRoleClicked(userId: String, roleId: String): void
+        + onAssignSubstituteClicked(primaryId: String, substituteId: String, scope: String, validUntil: LocalDate): void
+        + renderSubstituteAssignments(assignments: List<SubstituteApproverAssignment>): void
+        + renderAnnualPricingReviews(reviews: List<PriceReview>): void
+        + onApproveAnnualReviewClicked(reviewId: String, approvedPrice: BigDecimal, effectiveFrom: LocalDate): void
         + renderNotificationRules(rules: List<NotificationRule>): void
         + renderBusinessRules(rules: List<BusinessRule>): void
     }
 
-    class CustomerCancellationView <<boundary>> {
+    class CustomerManagementView <<boundary>> {
         + onRequestCancellationClicked(customerId: String, reason: String): void
+        + renderCancellationSubmitted(req: CancellationRequest): void
+        + onReviewCancellationClicked(requestId: String): void
         + onProcessCancellationClicked(requestId: String, approved: boolean): void
+        + renderCancellationReview(summary: CancellationReviewSummary): void
+        + renderCancellationProcessed(approved: boolean): void
     }
 }
 
 ' ==========================================
-' 2) APPLICATION LOGIC LAYER (CONTROLS)
+' 2) APPLICATION LOGIC LAYER (CONTROLS & SERVICES)
 ' ==========================================
 package "com.invoicingsystem.application" {
     class AccessAndConfigController <<control>> {
+        - auditTrail: AuditTrailService
+        - sessionManager: SessionManagementService
+        + logout(sessionId: String): boolean
+        + deactivateUserAccount(admin: Admin, targetUser: User): boolean
+        + expireInactiveSessions(now: LocalDateTime): int
+        + authenticateUser(email: String, password: String): boolean
+        + getDashboardSummary(user: User): DashboardSummary
         + delegateAccountAccess(admin: Admin, originalAssignee: User, grantee: User, scope: Customer, validUntil: LocalDate): AccountDelegation
         + revokeAccountDelegation(admin: Admin, delegation: AccountDelegation): boolean
-        + provisionGuestAccount(admin: Admin, email: String, validUntil: LocalDate): User
-        + updateUserPermissions(superAdmin: SuperAdmin, user: User, permissions: Set<String>): boolean
-        + manageBusinessRule(superAdmin: SuperAdmin, rule: BusinessRule): boolean  
+        + expireDelegations(date: LocalDate): void
+        + createCustomRole(superAdmin: SuperAdmin, name: String, permissions: Set<String>): AccessRole
+        + assignCustomRole(superAdmin: SuperAdmin, user: User, role: AccessRole): boolean
+        + revokeCustomRole(superAdmin: SuperAdmin, user: User, role: AccessRole): boolean
+        + assignSubstituteApprover(admin: Admin, primary: Admin, substitute: Admin, scope: String, validUntil: LocalDate): SubstituteApproverAssignment
+        + revokeSubstituteApprover(admin: Admin, assignment: SubstituteApproverAssignment): boolean
+        + expireSubstituteAssignments(today: LocalDate): void
+        + updateStandardPricingAndTargets(superAdmin: SuperAdmin, plan: BillingPlan): boolean
+        + updatePermissionsAndRules(superAdmin: SuperAdmin, user: User, permissions: Set<String>, rule: BusinessRule): boolean
+        - checkAccountStatusAndLockout(email: String): boolean
+        - verifyPasswordAgainstStoredHash(email: String, password: String): boolean
+        - resetFailedLoginAttempts(email: String): void
+        - recordFailedLoginAttempt(email: String): void
+        - blockAuthentication(email: String, durationMinutes: int): void
+        - validateDelegation(admin: Admin, originalAssignee: User, grantee: User, scope: Customer, validUntil: LocalDate): boolean
+        - validateRevocationPermission(admin: Admin, delegation: AccountDelegation): boolean
+        - validateSubstituteAuthority(admin: Admin, primary: Admin, substitute: Admin, scope: String): boolean
     }
 
     class CustomerAndSubscriptionController <<control>> {
         - notifier: NotificationGateway
+        - auditTrail: AuditTrailService
         + handleCancellationWorkflow(user: User, customer: Customer, reason: String): CancellationRequest
-        + processCancellationRequest(admin: Admin, request: CancellationRequest, approved: boolean): boolean
+        + getCancellationReview(admin: Admin, req: CancellationRequest): CancellationReviewSummary
+        + processCancellationRequest(admin: Admin, req: CancellationRequest, approved: boolean): boolean
+        - validateCancellationRequest(user: User, customer: Customer): boolean
+        - prepareMinimumAuthorizedAccountDetails(customer: Customer): CancellationReviewSummary
+        - validateCancellationDecision(admin: Admin, req: CancellationRequest): boolean
+    }
+
+    class CancellationReviewSummary <<DTO>> {
+        + customerId: String
+        + requestReason: String
+        + outstandingBalance: BigDecimal
+        + authorizedAccountDetails: List<String>
+    }
+
+    class SessionManagementService <<service>> {
+        - inactivityTimeoutMinutes: int
+        + createSession(user: User, now: LocalDateTime): UserSession
+        + recordActivity(sessionId: String, now: LocalDateTime): boolean
+        + endSession(sessionId: String): boolean
+        + expireInactiveSessions(now: LocalDateTime): int
+        + invalidateAllForUser(user: User): int
+        + configureInactivityTimeout(minutes: int): void
+    }
+
+    class AuditTrailService <<service>> {
+        - repository: AuditRecordRepository
+        + recordChange(entityType: String, entityId: String, actorId: String, oldValue: String, newValue: String): ChangeHistoryRecord
+        + persistAuditRecord(record: ChangeHistoryRecord): void
+        + recordRejectedOperation(actorId: String, reason: String): void
+    }
+
+    class InvoicingAndBillingController <<control>> {
+        + findAnnualPricingReviews(period: Year): List<PriceReview>
+        + approveAnnualPricingReview(admin: Admin, review: PriceReview, approvedPrice: BigDecimal, effectiveFrom: LocalDate): boolean
     }
 }
 
@@ -83,32 +152,59 @@ package "com.invoicingsystem.domain" {
         REJECTED
     }
 
+    enum SessionStatus {
+        ACTIVE
+        EXPIRED
+        REVOKED
+    }
+
+    enum ReminderKind {
+        DAY_3_FOLLOW_UP
+        DAY_5_FOLLOW_UP
+        PERIODIC_OVERDUE
+    }
+
     ' --- Domain Interfaces (Contracts) ---
     interface NotificationGateway <<interface>> {
         + sendNotification(recipientEmail: String, subject: String, body: String): boolean
+        + sendNotification(recipientEmail: String, subject: String, body: String, idempotencyKey: String): boolean
         + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
     }
 
+    interface NotificationRepository <<interface>> {
+        + findOrCreatePending(invoice: Invoice, kind: ReminderKind, plannedDate: LocalDate, deduplicationKey: String): Notification
+        + claimForDispatch(notificationId: String, leaseUntil: LocalDateTime): boolean
+        + markSent(notificationId: String, sentAt: LocalDateTime): void
+        + markFailed(notificationId: String, nextRetryAt: LocalDateTime): void
+    }
+
+    interface AuditRecordRepository <<interface>> {
+        + save(record: ChangeHistoryRecord): void
+        + findByEntity(entityType: String, entityId: String): List<ChangeHistoryRecord>
+    }
+
     ' --- Entities & Value Objects ---
-    class User {
-        - userId: String
-        - email: String
-        - passwordHash: String
-        - state: UserState
+    class AccessRole {
+        - roleId: String
+        - name: String
+        - description: String
         - permissions: Set<String>
-        + requestAccCancellation(customer: Customer, reason: String): CancellationRequest
+        - enabled: boolean
+        - systemRole: boolean
+        + updatePermissions(permissions: Set<String>): void
     }
 
-    class Admin {
-        + configNotificationTriggers(rule: NotificationRule): boolean
-        + processAccCancellation(req: CancellationRequest): boolean
-        + authorizeAccountDelegation(delegation: AccountDelegation): boolean
-        + provisionGuestAccount(email: String, validUntil: LocalDate): User
-    }
-
-    class SuperAdmin {
-        + configureUserPermissions(user: User, permissions: Set<String>): boolean        
-        + manageSystemRules(rule: BusinessRule): boolean
+    class SubstituteApproverAssignment {
+        - assignmentId: String
+        - approvalScope: String
+        - assignedAt: LocalDateTime
+        - validFrom: LocalDate
+        - validUntil: LocalDate
+        - status: DelegationStatus
+        - reason: String
+        + isActive(onDate: LocalDate): boolean
+        + expire(): void
+        + revoke(): void
     }
 
     class AccountDelegation {
@@ -119,6 +215,44 @@ package "com.invoicingsystem.domain" {
         + isActive(date: LocalDate): boolean
         + expire(): void
         + revoke(): void
+    }
+
+    class UserSession {
+        - sessionId: String
+        - tokenHash: String
+        - createdAt: LocalDateTime
+        - lastActivityAt: LocalDateTime
+        - revokedAt: LocalDateTime
+        - status: SessionStatus
+        + touch(now: LocalDateTime): void
+        + isExpired(now: LocalDateTime, inactivityMinutes: int): boolean
+        + revoke(): void
+    }
+
+    class ChangeHistoryRecord {
+        - recordId: String
+        - entityType: String
+        - entityId: String
+        - changeType: String
+        - actorId: String
+        - timestamp: LocalDateTime
+        - previousValue: String
+        - newValue: String
+    }
+
+    class NotificationRule {
+        - ruleId: String
+        - triggerType: String
+        - delayDays: int
+        - overdueIntervalDays: int
+        - enabled: boolean
+    }
+
+    class BusinessRule {
+        - ruleId: String
+        - name: String
+        - value: String
+        - enabled: boolean
     }
 
     class CancellationRequest {
@@ -136,20 +270,43 @@ package "com.invoicingsystem.domain" {
         - status: String
         - scheduledAt: LocalDateTime
         - sentAt: LocalDateTime
+        - reminderKind: ReminderKind
+        - deduplicationKey: String
+        - nextRetryAt: LocalDateTime
+        - deliveryAttempts: int
+        + setStatus(newStatus: String): void
+        + setSentAt(time: LocalDateTime): void
     }
 
-    class NotificationRule {
-        - ruleId: String
-        - triggerType: String
-        - delayDays: int
-        - enabled: boolean
+    class User {
+        - userId: String
+        - email: String
+        - passwordHash: String
+        - state: UserState
+        - permissions: Set<String>
+        - roles: Set<AccessRole>
+        - failedLoginAttempts: int
+        - lockedUntil: LocalDateTime
+        + requestAccCancellation(customer: Customer, reason: String): CancellationRequest
+        + deactivate(): void
+        + assignRole(role: AccessRole): void
+        + revokeRole(role: AccessRole): void
+        + hasPermission(permission: String): boolean
     }
 
-    class BusinessRule {
-        - ruleId: String
-        - name: String
-        - value: String
-        - enabled: boolean
+    class Admin {
+        + configNotificationTriggers(rule: NotificationRule): boolean
+        + processAccCancellation(req: CancellationRequest): boolean
+        + authorizeAccountDelegation(delegation: AccountDelegation): boolean
+        + provisionGuestAccount(email: String, validUntil: LocalDate): User
+        + designateSubstitute(primary: Admin, substitute: Admin, scope: String, validUntil: LocalDate): SubstituteApproverAssignment
+    }
+
+    class SuperAdmin {
+        + configureUserPermissions(user: User, permissions: Set<String>): boolean        
+        + manageSystemRules(rule: BusinessRule): boolean
+        + defineCustomRole(name: String, permissions: Set<String>): AccessRole
+        + assignRoleToUser(user: User, role: AccessRole): boolean
     }
 
     ' --- Contextual Referenced Entities ---
@@ -167,6 +324,19 @@ package "com.invoicingsystem.domain" {
     class Invoice {
         - invoiceNumber: String
     }
+
+    class BillingPlan {
+        - name: String
+    }
+
+    class PriceReview {
+        - reviewId: String
+    }
+
+    class FinancialPeriod {
+        - startDate: LocalDate
+        - endDate: LocalDate
+    }
 }
 
 ' ==========================================
@@ -177,7 +347,20 @@ package "com.invoicingsystem.infrastructure" {
         - smtpHost: String
         - gatewayApiKey: String
         + sendNotification(recipientEmail: String, subject: String, body: String): boolean
+        + sendNotification(recipientEmail: String, subject: String, body: String, idempotencyKey: String): boolean
         + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
+    }
+
+    class DatabaseNotificationRepository {
+        + findOrCreatePending(invoice: Invoice, kind: ReminderKind, plannedDate: LocalDate, deduplicationKey: String): Notification
+        + claimForDispatch(notificationId: String, leaseUntil: LocalDateTime): boolean
+        + markSent(notificationId: String, sentAt: LocalDateTime): void
+        + markFailed(notificationId: String, nextRetryAt: LocalDateTime): void
+    }
+
+    class DatabaseAuditRecordRepository {
+        + save(record: ChangeHistoryRecord): void
+        + findByEntity(entityType: String, entityId: String): List<ChangeHistoryRecord>
     }
 }
 
@@ -187,15 +370,27 @@ package "com.invoicingsystem.infrastructure" {
 
 ' Boundary to Control links
 SystemAdministrationView .down.> AccessAndConfigController
-CustomerCancellationView .down.> CustomerAndSubscriptionController
+SystemAdministrationView .down.> InvoicingAndBillingController
+CustomerManagementView .down.> CustomerAndSubscriptionController
 
 ' Control orchestrating Domain Entities & Gateways
 AccessAndConfigController .down.> User
 AccessAndConfigController .down.> AccountDelegation
+AccessAndConfigController .down.> SessionManagementService
+AccessAndConfigController .down.> AuditTrailService
+AccessAndConfigController .down.> AccessRole
+AccessAndConfigController .down.> SubstituteApproverAssignment
+
 CustomerAndSubscriptionController .down.> NotificationGateway
+CustomerAndSubscriptionController .down.> AuditTrailService
+
+SessionManagementService .down.> UserSession
+AuditTrailService .down.> AuditRecordRepository
 
 ' Infrastructure Implementation (Plugs into Domain Ports)
 NotificationGateway <|.. NotificationServiceAdapter
+NotificationRepository <|.. DatabaseNotificationRepository
+AuditRecordRepository <|.. DatabaseAuditRecordRepository
 
 ' Inheritance Mapping
 User <|-- Admin
@@ -209,19 +404,50 @@ Admin "0..1" --> "0..*" CancellationRequest : " -processedRequests"
 Notification "0..*" --> "0..1" User : " -internalRecipient"
 Notification "0..*" --> "0..1" Contact : " -customerRecipient"
 Notification "0..*" --> "0..1" Invoice : " -relatedInvoice"
+Notification "0..*" --> "0..1" NotificationRule : appliedRule
 
 AccountDelegation "0..*" --> "1" User : originalAssignee
 AccountDelegation "0..*" --> "1" User : delegatedTo
 AccountDelegation "0..*" --> "1" Customer : customerScope
 AccountDelegation "0..*" --> "1" Admin : authorizedBy
 
+Admin "1" --> "0..*" SubstituteApproverAssignment : assignedBy
+SubstituteApproverAssignment "0..*" --> "1" Admin : primaryApprover
+SubstituteApproverAssignment "0..*" --> "1" Admin : substituteApprover
+
+User "0..*" -- "0..*" AccessRole : assignedRoles
+User "1" --> "0..*" UserSession : sessions
+
 Admin "0..*" --> "0..*" NotificationRule : configures
 SuperAdmin "0..*" --> "0..*" BusinessRule : manages
+
+ChangeHistoryRecord "0..*" --> "0..1" User : changedBy
+
+note bottom of NotificationRepository
+    UNIQUE(deduplicationKey) is enforced in persistent storage.
+    findOrCreatePending and claimForDispatch must be atomic.
+    A dispatch lease prevents concurrent worker sends.
+    Use provider-side idempotency keys when supported;
+    otherwise a crash after sending can still cause duplicates.
+end note
+
+note bottom of SubstituteApproverAssignment
+    A substitute may approve only within the specified scope
+    and time window, and must have the required authority.
+    Assignment, revocation and use are audited (FR-7.2).
+end note
 
 note bottom of Notification
     Each notification must have exactly one recipient:
     either an internal User or a customer Contact.
     The related Invoice is optional.
+end note
+
+note bottom of UserSession
+    The inactivity timeout is configurable (FR-7.5.1).
+    Deactivating a User must immediately call
+    SessionManagementService.invalidateAllForUser (FR-7.5.2).
+    Persist only a token hash, not a raw session token.
 end note
 
 note bottom of AccountDelegation
@@ -232,5 +458,10 @@ note bottom of AccountDelegation
     The original assignment remains unchanged.
 end note
 
-@enduml
+note bottom of ChangeHistoryRecord
+    Persistent record of audited domain changes.
+    Controller lifelines in DS-BASE are generic placeholders;
+    they do not require a concrete ApplicationController class.
+end note
 
+@enduml

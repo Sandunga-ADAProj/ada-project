@@ -24,8 +24,8 @@ skinparam note {
 
 title Sequence Diagram - Subscription Setup & Commercial Exception Approval (UC-08, UC-09, UC-10, UC-12, FR-2.1.2, FR-2.6.2, FR-2.6.3)
 
-actor Staff as "staffUser : Base User"
-actor Admin as "approverAdmin : Administrator"
+actor Staff as "staffUser : User"
+actor Admin as "approverAdmin : Admin"
 
 box "Presentation Layer" #F5F7FA
     participant View as "customerView : CustomerManagementView" <<boundary>>
@@ -52,91 +52,125 @@ autonumber "<b>[00]</b>"
 Admin -> View : onSetupSubscriptionClicked(customerId, planId, futureStartDate)
 activate View
 
-View -> Ctrl : configureSubscription(admin, targetCustomer, standardPlan)
+View -> Ctrl : configureSubscription(admin, targetCustomer, standardPlan, futureStartDate)
 activate Ctrl
 
 create Sub
-Ctrl --> Sub : <<create>> (startDate=futureStartDate, anchorDay=1, status="PENDING_ACTIVATION")
+Ctrl -> Sub : <<create>> (plan=standardPlan, startDate=futureStartDate, anchorDay=dayOfMonth(futureStartDate), status=PENDING_ACTIVATION)
 activate Sub
 Sub --> Ctrl : return subscription
 deactivate Sub
 
-Ctrl -> Customer : setSubscription(subscription)
+Ctrl -> Customer : addSubscription(subscription)
 activate Customer
-Customer --> Ctrl : return true
+Customer --> Ctrl : true
 deactivate Customer
 
-Ctrl --> View : renderSubscriptionSetup(subscription)
+opt Customer has no other active subscriptions
+    Ctrl -> Customer : setStatus(PENDING_ACTIVATION)
+    activate Customer
+    Customer --> Ctrl : completed
+    deactivate Customer
+end
+
+Ctrl --> View : subscription
 deactivate Ctrl
 
-View --> Admin : Displays customer in PENDING_ACTIVATION state (FR-2.1.2)
+View -> View : renderSubscriptionSetup(subscription)
+View --> Admin : Displays subscription in PENDING_ACTIVATION state
 deactivate View
 
-== Step 2: Propose Commercial Exception & Price Review (UC-09, UC-12, FR-2.6.2, FR-2.6.4) ==
 
-Staff -> View : onProposeExceptionClicked(subId, type="VOLUME_DISCOUNT", value=25.0%)
+== Step 2: Propose Commercial Exception & Price Review (UC-09, UC-12, FR-2.6.1, FR-2.6.2) ==
+
+Staff -> View : onProposeExceptionClicked(subId, "VOLUME_DISCOUNT", 0.25)
 activate View
 
-View -> Ctrl : submitCommercialException(staffUser, subscription, "VOLUME_DISCOUNT", 25.0%)
+View -> Ctrl : submitCommercialException(staffUser, subscription, "VOLUME_DISCOUNT", 0.25)
 activate Ctrl
 
 create Exception
-Ctrl --> Exception : <<create>> (type="VOLUME_DISCOUNT", value=25.0%, status=PENDING)
+Ctrl -> Exception : <<create>> (type="VOLUME_DISCOUNT", value=0.25, status=PENDING)
 activate Exception
-Exception --> Ctrl : return commercialException
+Exception --> Ctrl : commercialException
 deactivate Exception
 
-' Flagging review item for administrator audit
-create Review
-Ctrl --> Review : <<create>> (proposedPrice, reason="Volume discount > threshold", status=PENDING)
-activate Review
-Review --> Ctrl : return priceReview
-deactivate Review
+Ctrl -> Ctrl : proposedPrice = calculateDiscountedPrice(subscription, 0.25)
 
-Ctrl --> View : renderExceptionSubmitted(commercialException)
+opt Proposed price outside configured plan range
+    create Review
+    Ctrl -> Review : <<create>> (proposedPrice, reason="Price outside allowed range", status=PENDING)
+    activate Review
+    Review --> Ctrl : priceReview
+    deactivate Review
+end
+
+Ctrl --> View : commercialException
 deactivate Ctrl
 
-View --> Staff : Displays submission confirmation (Pending Administrator Approval)
+View -> View : renderExceptionSubmitted(commercialException)
+View --> Staff : Displays submission confirmation (PENDING)
+
 deactivate View
 
-== Step 3: Administrator Decision Workflow (UC-10, FR-2.6.3) ==
 
-Admin -> View : onProcessExceptionClicked(exceptionId, approved=true)
+== Step 3: Administrator Decision Workflow (UC-10, FR-2.6.3, FR-2.6.4) ==
+
+Admin -> View : onProcessExceptionClicked(exceptionId, approved)
 activate View
 
-View -> Ctrl : approveCommercialException(approverAdmin, commercialException, true)
+View -> Ctrl : approveCommercialException(approverAdmin, commercialException, approved)
 activate Ctrl
 
-alt approved == true (Exception Granted)
+Ctrl -> Ctrl : hasRequiredApprovalAuthority(approverAdmin, commercialException)
+
+alt Insufficient approval authority
+
+    Ctrl --> View : Authorization denied
+    View --> Admin : Higher approval level required
+
+else Authorized and approved
+
     Ctrl -> Exception : approve()
     activate Exception
-    Exception -> Exception : setStatus(APPROVED)
-    Exception --> Ctrl : return void
+    Exception --> Ctrl : status=APPROVED
     deactivate Exception
+
+    Ctrl -> Ctrl : discountedPrice = calculateDiscountedPrice(subscription, 0.25)
 
     Ctrl -> Sub : setPrice(discountedPrice)
     activate Sub
-    Sub --> Ctrl : return true
+    Sub --> Ctrl : true
     deactivate Sub
 
-    ' Reusable cross-cutting reference for audit logging
-    ref over Ctrl, Sub : ref DS-BASE: Notification Dispatch & Pricing Audit Trail (FR-2.6.4)
+    opt Associated PriceReview exists
+        Ctrl -> Review : setStatus(APPROVED)
+        Review --> Ctrl : completed
+    end
 
-    Ctrl --> View : return true (Success)
-    View --> Admin : Displays updated subscription with approved discount
-else approved == false (Exception Rejected)
+    ref over Ctrl, Sub : DS-BASE: Notification & Pricing Audit (oldPrice, newPrice, approver, timestamp)
+
+    Ctrl --> View : true
+    View --> Admin : Displays approved discount
+
+else Authorized and rejected
+
     Ctrl -> Exception : reject()
     activate Exception
-    Exception -> Exception : setStatus(REJECTED)
-    Exception --> Ctrl : return void
+    Exception --> Ctrl : status=REJECTED
     deactivate Exception
 
-    ref over Ctrl, Exception : ref DS-BASE: Notification Dispatch to Staff User
+    opt Associated PriceReview exists
+        Ctrl -> Review : setStatus(REJECTED)
+        Review --> Ctrl : completed
+    end
 
-    Ctrl --> View : return false (Rejected)
-    View --> Admin : Displays exception rejection confirmation
+    ref over Ctrl, Exception : DS-BASE: Notification & Audit Trail
+
+    Ctrl --> View : false
+    View --> Admin : Displays rejection confirmation
+
 end
-
 deactivate Ctrl
 deactivate View
 

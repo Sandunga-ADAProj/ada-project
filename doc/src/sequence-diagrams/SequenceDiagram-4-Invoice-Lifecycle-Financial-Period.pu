@@ -1,20 +1,12 @@
 @startuml
 skinparam boxPadding 10
 skinparam participantPadding 10
-
-' Component/Participant styling
 skinparam participant {
     BackgroundColor #FFFFFF
     BorderColor #2B3E6A
     FontColor #000000
 }
-
-' Arrow styling
-skinparam arrow {
-    Color #2B3E6A
-}
-
-' Note styling
+skinparam arrow { Color #2B3E6A }
 skinparam note {
     BackgroundColor #FDE2B8
     BorderColor #2B3E6A
@@ -22,125 +14,170 @@ skinparam note {
     FontName monospace
 }
 
-title Sequence Diagram - Invoice Lifecycle, Financial Period Lock & Accounting Export (UC-14, UC-15, UC-16, UC-17, UC-18, FR-2.4, FR-2.7, FR-4.1.1)
+title Sequence Diagram 4 - Invoice Lifecycle, Period Lock & Accounting Export (FR-2.3.2, FR-2.4, FR-2.7, FR-4.1.1, FR-6.3, FR-6.4)
 
-actor Admin as "adminUser : Administrator"
-actor SuperAdmin as "superAdmin : Super-Administrator"
+actor "adminUser : Admin" as Admin
+actor "superAdmin : SuperAdmin" as SuperAdmin
 
 box "Presentation Layer" #F5F7FA
-    participant View as "invoicingView : InvoicingAndReconciliationView" <<boundary>>
+    participant "invoicingView : InvoicingAndReconciliationView" as View <<boundary>>
+    participant "administrationView : SystemAdministrationView" as AdminView <<boundary>>
 end box
-
 box "Application Layer" #EBF0F5
-    participant Ctrl as "invoicingCtrl : InvoicingAndBillingController" <<control>>
+    participant "invoicingCtrl : InvoicingAndBillingController" as Ctrl <<control>>
 end box
-
 box "Domain Layer" #FFFFFF
-    participant Invoice as "targetInvoice : Invoice"
-    participant Period as "fiscalPeriod : FinancialPeriod"
-    participant Pkg as "accountingExport : AccountingExportPackage"
+    participant "targetInvoice : Invoice" as Invoice
+    participant "testInvoice : Invoice" as TestInvoice
+    participant "fiscalPeriod : FinancialPeriod" as Period
+    participant "accountingExport : AccountingExportPackage" as Pkg
+    participant "notificationGateway : NotificationGateway" as Notifier <<interface>>
 end box
-
-' --- SEQUENCE FLOW ---
 
 autonumber "<b>[00]</b>"
 
-== Step 1: Issue Validation & Period Lock Constraint (UC-15, UC-16, UC-17, FR-2.7) ==
-
+== Step 1: Period Lock & Audited Override (FR-2.7) ==
 Admin -> View : onIssueInvoiceClicked(invoiceNumber)
 activate View
-
 View -> Ctrl : issueAndSendInvoice(adminUser, targetInvoice)
 activate Ctrl
-
+Ctrl -> Ctrl : authorized = false
 Ctrl -> Period : isLocked()
 activate Period
-Period --> Ctrl : return isPeriodLocked
-deactivate Period
-
-alt isPeriodLocked == true (FR-2.7: Period Closure Enforcement)
-    Ctrl --> View : renderError("Financial Period administratively closed")
-    View --> Admin : Displays period lock violation error
-    
-    ' Super-Administrator Exception Path (UC-17)
-    SuperAdmin -> View : onOverridePeriodClicked(fiscalPeriod, reason="Tax Audit Adjustment")
-    View -> Ctrl : overrideLockedPeriod(superAdmin, fiscalPeriod, "Tax Audit Adjustment")
-    
-    Ctrl -> Period : overrideLock("Tax Audit Adjustment")
-    activate Period
-    Period -> Period : unlockTemporarily()
-    Period --> Ctrl : return true
-    deactivate Period
-
-    ref over Ctrl, Period : ref DS-BASE: Super-Admin Override Audit Trail (FR-2.7)
-    
-    Ctrl --> View : renderOverrideGranted()
-    View --> SuperAdmin : Displays lock override confirmed
+Period --> Ctrl : locked
+ deactivate Period
+alt Financial period locked
+    Ctrl --> View : Financial period closed
+    View --> Admin : Display period lock warning
+    opt SuperAdmin requests explicit exception
+        SuperAdmin -> AdminView : onOverridePeriodClicked(fiscalPeriod, reason)
+        activate AdminView
+        AdminView -> Ctrl : authorizeInvoiceOverride(superAdmin, targetInvoice, reason)
+        Ctrl -> Ctrl : validateSuperAdminPermission(superAdmin)
+        alt Permission granted
+            Ctrl -> Period : grantInvoiceException(targetInvoice, reason)
+            activate Period
+            Period --> Ctrl : granted
+            deactivate Period
+            alt Invoice-specific exception granted
+                Ctrl -> Ctrl : authorized = true
+                ref over Ctrl, Period : DS-BASE: Audit specific period exception
+            end
+            Ctrl --> AdminView : granted
+            AdminView --> SuperAdmin : Display decision
+        else Permission denied
+            Ctrl --> AdminView : denied
+            AdminView --> SuperAdmin : Display authorization error
+        end
+        deactivate AdminView
+    end
+else Financial period open
+    Ctrl -> Ctrl : authorized = true
 end
 
-== Step 2: Invoice Lifecycle Progression & Dispatch (UC-15, FR-2.4, FR-4.1.1) ==
+== Step 2: Issue, Mark SENT & Trigger Company Notification (FR-2.4, FR-4.1.1) ==
+alt Invoice operation authorized
+    Ctrl -> Ctrl : validateInvoiceForIssuance(targetInvoice)
+    alt Invoice valid and status READY
+        Ctrl -> Invoice : setIssueDate(today)
+        activate Invoice
+        Invoice --> Ctrl : completed
+        deactivate Invoice
+        Ctrl -> Invoice : changeStatus(ISSUED)
+        activate Invoice
+        Invoice --> Ctrl : true
+        deactivate Invoice
+        ref over Ctrl, Invoice : DS-BASE: Invoice Issuance Audit & Admin Alert
 
-Ctrl -> Invoice : changeStatus(ISSUED)
-activate Invoice
-Invoice --> Ctrl : return true
-deactivate Invoice
+        Ctrl -> Invoice : changeStatus(SENT)
+        activate Invoice
+        Invoice --> Ctrl : true
+        deactivate Invoice
 
-Ctrl -> Invoice : changeStatus(SENT)
-activate Invoice
-Invoice --> Ctrl : return true
-deactivate Invoice
+        note over Invoice
+            SENT records the invoice dispatch event.
+            Email delivery is tracked separately
+            through Notification status.
+        end note
 
-' Automatic client notification upon SENT state (FR-4.1.1)
-ref over Ctrl, Invoice : ref DS-BASE: Automated Client Notification & State Audit (FR-4.1.1)
+        Ctrl -> Notifier : sendNotification(customer.companyEmail, "Invoice sent", invoiceLink)
+        activate Notifier
+        Notifier --> Ctrl : sent
+        deactivate Notifier
+        alt Notification sent successfully
+            ref over Ctrl, Invoice : DS-BASE: Notification Delivered Audit
+            Ctrl --> View : targetInvoice
+            View -> View : renderInvoiceDetails(targetInvoice, comments)
+            View --> Admin : Display SENT status
+        else Notification dispatch failed
+            Ctrl -> Ctrl : queueInvoiceNotificationRetry(targetInvoice, customer.companyEmail)
+            note over Invoice
+                Invoice remains SENT; notification is FAILED
+                and will be retried, without reissuing the invoice.
+            end note
+            ref over Ctrl, Invoice : DS-BASE: Failed Notification Audit
+            Ctrl --> View : Invoice marked SENT; email queued for retry
+            View --> Admin : Display notification warning
+        end
+    else Invoice invalid or not READY
+        Ctrl --> View : Validation failed
+        View --> Admin : Display validation error
+    end
+else Invoice operation not authorized
+    note over Ctrl, Invoice : No invoice mutation occurs without authorization
+end
 
-Ctrl --> View : renderInvoiceDetails(targetInvoice)
 deactivate Ctrl
-
-View --> Admin : Displays invoice updated to SENT status
 deactivate View
 
-== Step 3: Accounting Package Generation & Export (UC-18) ==
-
-Admin -> View : onExportPackageClicked(fiscalPeriod)
+== Step 3: Accounting Export Package & Audit Metadata (FR-6.3, FR-6.4) ==
+Admin -> View : onExportPackageClicked(fiscalPeriod, filters)
 activate View
-
-View -> Ctrl : generateAccountingExport(adminUser, fiscalPeriod)
+View -> Ctrl : generateAccountingExport(adminUser, fiscalPeriod, filters)
 activate Ctrl
 
+opt Bulk export threshold exceeded
+    ref over Ctrl, Period : DS-BASE: Alert Administrator of Mass Export Attempt (FR-6.4.2)
+end
+
+Ctrl -> Ctrl : version = nextExportVersion(fiscalPeriod)
+Ctrl -> Ctrl : generatedPath = generateExportFiles(fiscalPeriod, filters)
 create Pkg
-Ctrl --> Pkg : <<create>> (exportId, version=1, timestamp=now(), filePath="/exports/q4.zip")
+Ctrl -> Pkg : <<create>> (exportId, period=fiscalPeriod, version, previousVersion, generatedAt=now(), filePath=generatedPath, requestedBy=adminUser, appliedFilters=filters)
 activate Pkg
-Pkg --> Ctrl : return accountingExport
-deactivate Pkg
-
-Ctrl --> View : renderExportDownload(accountingExport)
+Pkg --> Ctrl : accountingExport
+ deactivate Pkg
+ref over Ctrl, Pkg : DS-BASE: Audited Export (user, filters, version, timestamp)
+Ctrl --> View : accountingExport
 deactivate Ctrl
+View -> View : renderExportDownload(accountingExport)
+View --> Admin : Display downloadable, versioned package
+ deactivate View
 
-View --> Admin : Delivers downloadable compliant accounting package
-deactivate View
-
-== Step 4: Test Invoice Disposal & Resource Destruction (UC-14) ==
-
+== Step 4: Unissued Test Invoice Deletion (FR-2.3.2, FR-2.7) ==
 Admin -> View : onDeleteTestInvoiceClicked(testInvoiceNumber)
 activate View
-
-View -> Ctrl : deleteTestInvoice(adminUser, targetInvoice)
+View -> Ctrl : deleteTestInvoice(adminUser, testInvoice)
 activate Ctrl
-
-Ctrl -> Invoice : isEditable()
-activate Invoice
-Invoice --> Ctrl : return true (Type=TEST, Status=DRAFT)
-deactivate Invoice
-
-' Explicit dynamic destruction of resource (Slide Type 6: Destroy Message)
-Ctrl -> Invoice : dispose()
-destroy Invoice
-
-Ctrl --> View : renderInvoiceDeleted()
-deactivate Ctrl
-
-View --> Admin : Displays test invoice removal confirmation
-deactivate View
-
+Ctrl -> TestInvoice : isEditable()
+activate TestInvoice
+TestInvoice --> Ctrl : editable
+ deactivate TestInvoice
+Ctrl -> Period : isLocked()
+activate Period
+Period --> Ctrl : locked
+ deactivate Period
+alt Invoice type TEST, status DRAFT, editable, and period unlocked
+    ref over Ctrl, TestInvoice : DS-BASE: Audit Test Invoice Deletion
+    Ctrl -> TestInvoice : dispose()
+    destroy TestInvoice
+    Ctrl --> View : deletionSuccessful
+    View -> View : renderInvoiceDeleted()
+    View --> Admin : Display confirmation
+else Deletion is not permitted
+    Ctrl --> View : deletionRejected
+    View --> Admin : Display restriction
+end
+ deactivate Ctrl
+ deactivate View
 @enduml
-

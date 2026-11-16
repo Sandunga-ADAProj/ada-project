@@ -22,7 +22,7 @@ skinparam note {
     FontName monospace
 }
 
-title Sequence Diagram - Automated Recurring Billing Batch & Calendar Adjustment (UC-13, UC-19, FR-2.1.1, FR-2.2.1, FR-2.2.2, FR-2.9)
+title Sequence Diagram - Automated Recurring Billing Batch & Calendar Adjustment (UC-13, UC-19, FR-2.1.1, FR-2.1.2, FR-2.2.1, FR-2.2.2, FR-4.4.2)
 
 actor Scheduler as "billingScheduler : SystemDaemon"
 
@@ -46,82 +46,129 @@ end box
 
 autonumber "<b>[00]</b>"
 
-== Step 1: Regional Working Day Verification (UC-19) ==
+
+== Step 1: Automated Recurring Billing (UC-13, FR-2.1.1, FR-2.1.2) ==
 
 Scheduler -> Ctrl : executeRecurringBillingBatch(executionDate)
 activate Ctrl
 
-Ctrl -> Calendar : isWorkingDay(executionDate, targetCountry="ES")
-activate Calendar
+loop For each subscription scheduled for this billing anchor
 
-Calendar -> CalAdapter : isWorkingDay(executionDate, "ES")
-activate CalAdapter
-note over CalAdapter: Evaluates national holidays\nand non-working weekends
-CalAdapter --> Calendar : return isWorking (false)
-deactivate CalAdapter
+    Ctrl -> Ctrl : checkBillingEligibility(subscription, customer, executionDate)
 
-Calendar --> Ctrl : return false
-deactivate Calendar
+    alt Subscription inactive, activation date not reached, or customer cancelled
+        Ctrl -> Ctrl : recordSkippedSubscription(subscription)
 
-opt isWorking == false (Adjust Date for Non-Working Day)
-    Ctrl -> Calendar : getNextWorkingDay(executionDate, "ES")
-    activate Calendar
-    Calendar -> CalAdapter : getNextWorkingDay(executionDate, "ES")
-    activate CalAdapter
-    CalAdapter --> Calendar : return adjustedWorkingDate
-    deactivate CalAdapter
-    Calendar --> Ctrl : return adjustedWorkingDate
-    deactivate Calendar
-end
+    else Subscription eligible
 
-== Step 2: Batch Invoice Generation Loop & Tax Validation (UC-13, FR-2.1.1, FR-2.9) ==
-
-loop for each active subscription matching billingAnchorDay
-    Ctrl -> Customer : hasCompleteTaxInfo()
-    activate Customer
-    Customer --> Ctrl : return isValidTaxInfo
-    deactivate Customer
-
-    alt isValidTaxInfo == false (FR-2.9: Missing Tax Information Gate)
-        Ctrl -> Customer : setStanding(IN_DISPUTE)
+        Ctrl -> Customer : hasCompleteTaxInfo()
         activate Customer
-        Customer --> Ctrl : return void
+        Customer --> Ctrl : isValidTaxInfo
         deactivate Customer
 
-        ref over Ctrl, Customer : ref DS-BASE: Alert Administrator of Incomplete Tax Data (FR-4.2.2)
-    else isValidTaxInfo == true (Eligible for Automatic Generation)
-        create Invoice
-        Ctrl --> Invoice : <<create>> (invoiceNumber, type=RECURRING, status=READY, issueDate, dueDate)
-        activate Invoice
-        Invoice --> Ctrl : return newInvoice
-        deactivate Invoice
+        alt Missing tax information
 
-        create Line
-        Ctrl --> Line : <<create>> (desc="Subscription Fee", qty=1, unitPrice=sub.price, taxRate=0.21)
-        activate Line
-        Line --> Ctrl : return lineItem
-        deactivate Line
+            ref over Ctrl, Customer : DS-BASE: Alert Administrator of Missing Tax Information (FR-4.2.2)
 
-        Ctrl -> Invoice : addInvoiceLine(lineItem)
-        activate Invoice
-        ' Autofill and VAT compliance calculations (FR-2.2.2)
-        Invoice -> Invoice : calculateVatAndTotals()
-        activate Invoice
-        deactivate Invoice
-        Invoice --> Ctrl : return totalsCalculated
-        deactivate Invoice
+            Ctrl -> Ctrl : recordSkippedSubscription(subscription)
 
-        Ctrl -> Customer : linkInvoice(newInvoice)
-        activate Customer
-        Customer --> Ctrl : return true
-        deactivate Customer
+        else Tax information complete
 
-        ref over Ctrl, Invoice : ref DS-BASE: Notification Dispatch & Audit Trail (FR-2.2.1)
+            Ctrl -> Ctrl : invoiceAlreadyExists(subscription, executionDate)
+
+            alt Invoice already generated for this billing period
+                Ctrl -> Ctrl : recordSkippedSubscription(subscription)
+
+            else No duplicate invoice
+
+                Ctrl -> Ctrl : isFinancialPeriodLocked(executionDate)
+
+                alt Financial period locked
+                    Ctrl -> Ctrl : recordBlockedGeneration(subscription)
+
+                    ref over Ctrl, Customer : DS-BASE: Audit Blocked Invoice Creation (FR-2.7)
+
+                else Financial period open
+
+                    == Step 2: Due Date & Calendar Adjustment (UC-19, FR-4.4.2) ==
+
+                    Ctrl -> Ctrl : dueDate = executionDate.plusDays(subscription.paymentTermsDays)
+
+                    Ctrl -> Calendar : isWorkingDay(dueDate, customer.country)
+                    activate Calendar
+
+                    Calendar -> CalAdapter : isWorkingDay(dueDate, customer.country)
+                    activate CalAdapter
+                    CalAdapter --> Calendar : isWorking
+                    deactivate CalAdapter
+
+                    Calendar --> Ctrl : isWorking
+                    deactivate Calendar
+
+                    opt Due date is not a working day
+                        Ctrl -> Calendar : getNextWorkingDay(dueDate, customer.country)
+                        activate Calendar
+
+                        Calendar -> CalAdapter : getNextWorkingDay(dueDate, customer.country)
+                        activate CalAdapter
+                        CalAdapter --> Calendar : adjustedDueDate
+                        deactivate CalAdapter
+
+                        Calendar --> Ctrl : adjustedDueDate
+                        deactivate Calendar
+
+                        Ctrl -> Ctrl : dueDate = adjustedDueDate
+                    end
+
+                    == Step 3: Invoice Generation & Tax Calculation (FR-2.2.1, FR-2.2.2) ==
+
+                    Ctrl -> Ctrl : invoiceNumber = nextSequentialInvoiceNumber()
+                    Ctrl -> Ctrl : taxRate = resolveApplicableTaxRate(customer, subscription)
+
+                    create Invoice
+                    Ctrl -> Invoice : <<create>> (invoiceNumber, type=RECURRING, status=READY, issueDate=null, dueDate)
+                    activate Invoice
+                    Invoice --> Ctrl : newInvoice
+                    deactivate Invoice
+
+                    Ctrl -> Invoice : populateBillingDetails(customer)
+                    activate Invoice
+                    Invoice --> Ctrl : completed
+                    deactivate Invoice
+
+                    create Line
+                    Ctrl -> Line : <<create>> (desc="Subscription Fee", qty=1, unitPrice=sub.price, taxRate=taxRate)
+                    activate Line
+                    Line --> Ctrl : lineItem
+                    deactivate Line
+
+                    Ctrl -> Invoice : addInvoiceLine(lineItem)
+                    activate Invoice
+
+                    Invoice -> Invoice : calculateVatAndTotals()
+
+                    Invoice --> Ctrl : totalsCalculated
+                    deactivate Invoice
+
+                    Ctrl -> Customer : linkInvoice(newInvoice)
+                    activate Customer
+                    Customer --> Ctrl : true
+                    deactivate Customer
+
+                    note over Invoice
+                        Invoice remains READY.
+                        Issue date is assigned when issued.
+                        Due date is recalculated if necessary.
+                    end note
+
+                    ref over Ctrl, Invoice : DS-BASE: Invoice Creation Audit Trail
+
+                end
+            end
+        end
     end
 end
 
-Ctrl --> Scheduler : return batchExecutionSummary (successCount, failureCount)
+Ctrl --> Scheduler : completed
 deactivate Ctrl
-
 @enduml
-

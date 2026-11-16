@@ -24,26 +24,11 @@ skinparam note {
 
 title Sequence Diagram - Base Transversal: Notification Dispatch & Audit Trail (FR-4.1, FR-4.2, FR-5.4)
 
-' ─────────────────────────────────────────────────────────────────────────────
-' NOTE ON ABSTRACT PARTICIPANTS
-'
-' This is a reusable base diagram (DS-BASE) referenced by all other SDs via
-' "ref DS-BASE: ...". Its participants are intentionally abstract:
-'
-'   ApplicationController  <<abstract>> — represents any concrete controller
-'     (AccessAndConfigController, CustomerAndSubscriptionController,
-'      InvoicingAndBillingController, ReconciliationController) — see ComponentsDiagram.
-'
-'   DomainEntity  <<abstract>> — represents any concrete domain entity
-'     (Customer, Invoice, Subscription, User, etc.) — see ComponentsDiagram domain components.
-'
-'   ChangeHistoryRecord — cross-cutting audit value object; every domain entity
-'     creates one upon state mutation. Owned by the same subdomain as the mutated entity.
-'     See ComponentsDiagram "Invoice Management" for canonical listing.
-'
-'   Notification — dispatch DTO created by NotificationGateway before async send.
-'     See ComponentsDiagram "Invoice Management" for canonical listing.
-' ─────────────────────────────────────────────────────────────────────────────
+' DS-BASE is a reusable sequence referenced by the other diagrams.
+' ApplicationController and DomainEntity are generic placeholders,
+' not concrete classes from the Class Diagram.
+' ChangeHistoryRecord represents a persistent audit record.
+' NotificationGateway is implemented by NotificationServiceAdapter.
 
 box "Application Layer" #EBF0F5
     ' <<abstract>> — stands for any concrete ApplicationController (see ComponentsDiagram)
@@ -57,7 +42,7 @@ box "Domain Layer" #FFFFFF
     participant Log as "auditRecord : ChangeHistoryRecord"
     ' NotificationGateway: domain port implemented by NotificationServiceAdapter (ComponentsDiagram)
     participant Notifier as "notificationGateway : NotificationGateway" <<interface>>
-    ' Notification: dispatch DTO created before async send (see ComponentsDiagram note)
+    ' Notification: dispatch record created before synchronous send
     participant Notif as "notification : Notification"
 end box
 
@@ -70,42 +55,106 @@ end box
 
 autonumber "<b>[00]</b>"
 
-== Step 1: Encapsulated Entity Self-Logging (Audit Trail) ==
 
-Ctrl -> Entity : executeStateTransition(newState, actorId)
-activate Entity
+== Step 1: Domain State Change & Audit Trail ==
 
-' Entity encapsulates its internal audit logging upon mutation
-Entity -> Entity : logChange("STATE_MODIFIED", actorId)
-activate Entity
-create Log
-Entity --> Log : <<create>> (timestamp, type="STATE_MODIFIED", authorId=actorId)
-deactivate Entity
+opt Business event modifies a domain entity
 
-Entity --> Ctrl : return mutationSuccess (true)
-deactivate Entity
+    Ctrl -> Entity : executeStateTransition(newState, actorId)
+    activate Entity
 
-== Step 2: Asynchronous Notification Dispatching ==
+    Entity --> Ctrl : mutationResult
+    deactivate Entity
 
-' Asynchronous Message (Slide Type 2): Solid line with open arrowhead (non-blocking call)
-Ctrl ->> Notifier : sendNotification(recipientEmail, subject, body)
-activate Notifier
+    alt State change successful
 
-create Notif
-Notifier --> Notif : <<create>> (notificationId, type="SYSTEM_ALERT", status="PENDING")
+        create Log
+        Ctrl -> Log : <<create>> (entityId, changeType, actorId, timestamp, previousValue, newValue)
+        activate Log
 
-' Polymorphic non-blocking dispatch to external infrastructure adapter
-Notifier ->> Adapter : sendNotification(recipientEmail, subject, body)
-activate Adapter
-note over Adapter: Delivers email via SMTP\nor external notification API asynchronously\n(Sender continues without blocking)
-Adapter --> Notifier : notifyDeliveryStatus(delivered=true)
-deactivate Adapter
+        Log --> Ctrl : auditRecord
+        deactivate Log
 
-Notifier -> Notif : setSentAt(timestamp)
-activate Notif
-Notif --> Notifier : return void
-deactivate Notif
+        Ctrl -> Ctrl : persistAuditRecord(auditRecord)
 
-deactivate Notifier
+        note over Log
+            Audit record includes:
+            - Affected entity
+            - Acting user
+            - Timestamp
+            - Previous value
+            - New value
+
+            Retained according to legal
+            and accounting requirements.
+        end note
+
+    else State change rejected
+
+        Ctrl -> Ctrl : recordRejectedOperation(actorId, reason)
+
+    end
+
+end
+
+
+== Step 2: Notification Dispatching (FR-4.1, FR-4.2) ==
+
+opt Business event requires notification
+
+    create Notif
+    Ctrl -> Notif : <<create>> (notificationId, type, status=PENDING)
+    activate Notif
+    Notif --> Ctrl : notification
+    deactivate Notif
+
+    Ctrl -> Notifier : sendNotification(recipientEmail, subject, body)
+    activate Notifier
+
+    Notifier -> Adapter : sendNotification(recipientEmail, subject, body)
+    activate Adapter
+
+    note over Adapter
+        Sends email through SMTP
+        or an external notification service.
+    end note
+
+    Adapter --> Notifier : sent
+    deactivate Adapter
+
+    Notifier --> Ctrl : sent
+    deactivate Notifier
+
+    alt Notification successfully sent
+
+        Ctrl -> Notif : setStatus(SENT)
+        activate Notif
+        Notif --> Ctrl : completed
+        deactivate Notif
+
+        Ctrl -> Notif : setSentAt(now())
+        activate Notif
+        Notif --> Ctrl : completed
+        deactivate Notif
+
+    else Notification sending failed
+
+        Ctrl -> Notif : setStatus(FAILED)
+        activate Notif
+        Notif --> Ctrl : completed
+        deactivate Notif
+
+        Ctrl -> Ctrl : scheduleNotificationRetry(notification)
+
+        note over Notif
+            Notification remains recorded.
+            Sending can be retried without
+            losing the notification history.
+        end note
+
+    end
+
+end
+
 
 @enduml

@@ -1,0 +1,144 @@
+@startuml
+skinparam boxPadding 10
+skinparam participantPadding 10
+skinparam participant {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+}
+skinparam arrow { Color #2B3E6A }
+skinparam note {
+    BackgroundColor #FDE2B8
+    BorderColor #2B3E6A
+    FontColor #000000
+    FontName monospace
+}
+
+title Sequence Diagram 8 - Automated Reminders, Atomic Claim & Retry (FR-4.1.2, FR-4.1.3, FR-4.4.2, FR-5.2)
+
+actor "reminderScheduler : SystemDaemon" as Scheduler
+
+box "Application Layer" #EBF0F5
+    participant "billingCtrl : InvoicingAndBillingController" as Ctrl <<control>>
+    participant "auditTrail : AuditTrailService" as Audit <<service>>
+end box
+box "Domain Layer" #FFFFFF
+    participant "invoice : Invoice" as Invoice
+    participant "rule : NotificationRule" as Rule
+    participant "calendar : BusinessCalendarService" as Calendar <<interface>>
+    participant "notificationRepository : NotificationRepository" as Repository <<interface>>
+    participant "notificationGateway : NotificationGateway" as Gateway <<interface>>
+end box
+box "Infrastructure Layer" #F5F7FA
+    participant "calendarAdapter : RegionalCalendarAdapter" as CalAdapter <<infrastructure>>
+    participant "notificationStorage : DatabaseNotificationRepository" as DbRepo <<infrastructure>>
+    participant "notificationAdapter : NotificationServiceAdapter" as NotifAdapter <<infrastructure>>
+end box
+
+autonumber "<b>[00]</b>"
+
+== Step 1: Select Outstanding Invoices (FR-4.1.2, FR-4.1.3, FR-5.2) ==
+Scheduler -> Ctrl : processScheduledReminders(runDate)
+activate Ctrl
+Ctrl -> Ctrl : findReminderCandidates(runDate)
+
+loop For each candidate invoice
+    Ctrl -> Invoice : isReminderEligible()
+    activate Invoice
+    Invoice --> Ctrl : eligible
+    deactivate Invoice
+    alt Invoice paid, resolved, written off or not yet activated
+        note over Ctrl, Invoice : No reminders for ineligible invoices
+    else Invoice unpaid and eligible
+        Ctrl -> Ctrl : computeReminderOccurrences(invoice, runDate)
+        note over Ctrl, Rule
+            Day 3 and day 5 = calendar days after issueDate.
+            Periodic overdue = after dueDate at configured intervals.
+            Cancelled accounts still receive reminders for
+            unpaid historical invoices; new billing stays frozen.
+        end note
+
+        loop Each due reminder occurrence
+            == Step 2: Postpone Non-Working Dates (FR-4.4.2) ==
+            Ctrl -> Calendar : isWorkingDay(occurrence.plannedDate, customer.country)
+            activate Calendar
+            Calendar -> CalAdapter : isWorkingDay(occurrence.plannedDate, customer.country)
+            activate CalAdapter
+            CalAdapter --> Calendar : working
+            deactivate CalAdapter
+            Calendar --> Ctrl : working
+            deactivate Calendar
+
+            alt Non-working scheduled date
+                Ctrl -> Calendar : getNextWorkingDay(occurrence.plannedDate, customer.country)
+                activate Calendar
+                Calendar -> CalAdapter : getNextWorkingDay(occurrence.plannedDate, customer.country)
+                activate CalAdapter
+                CalAdapter --> Calendar : adjustedDate
+                deactivate CalAdapter
+                Calendar --> Ctrl : adjustedDate
+                deactivate Calendar
+                Ctrl -> Ctrl : sendDate = adjustedDate
+            else Working day
+                Ctrl -> Ctrl : sendDate = occurrence.plannedDate
+            end
+
+            == Step 3: Atomic Reservation & Idempotent Dispatch ==
+            opt sendDate <= runDate
+                Ctrl -> Ctrl : key = buildReminderDeduplicationKey(invoice, occurrence.kind, occurrence.plannedDate)
+                Ctrl -> Repository : findOrCreatePending(invoice, occurrence.kind, occurrence.plannedDate, key)
+                activate Repository
+                Repository -> DbRepo : findOrCreatePending(invoice, occurrence.kind, occurrence.plannedDate, key)
+                activate DbRepo
+                note over DbRepo
+                    Enforce UNIQUE(deduplicationKey).
+                    Concurrent attempts return the same record.
+                end note
+                DbRepo --> Repository : notification
+                deactivate DbRepo
+                Repository --> Ctrl : notification
+                deactivate Repository
+
+                Ctrl -> Repository : claimForDispatch(notification.notificationId, leaseUntil)
+                activate Repository
+                Repository -> DbRepo : claimForDispatch(notification.notificationId, leaseUntil)
+                activate DbRepo
+                DbRepo --> Repository : claimed
+                deactivate DbRepo
+                Repository --> Ctrl : claimed
+                deactivate Repository
+
+                alt Claim won and notification not SENT
+                    Ctrl -> Gateway : sendNotification(billingEmail, subject, body, idempotencyKey=key)
+                    activate Gateway
+                    Gateway -> NotifAdapter : sendNotification(billingEmail, subject, body, key)
+                    activate NotifAdapter
+                    NotifAdapter --> Gateway : accepted
+                    deactivate NotifAdapter
+                    Gateway --> Ctrl : accepted
+                    deactivate Gateway
+                    alt Dispatch accepted
+                        Ctrl -> Repository : markSent(notification.notificationId, now())
+                        Repository --> Ctrl : completed
+                        Ctrl -> Audit : recordChange("Notification", notificationId, "system", "PENDING", "SENT")
+                        Audit --> Ctrl : auditRecord
+                    else Dispatch failed
+                        Ctrl -> Repository : markFailed(notification.notificationId, retryAt)
+                        Repository --> Ctrl : completed
+                        Ctrl -> Audit : recordChange("Notification", notificationId, "system", "PENDING", "FAILED")
+                        Audit --> Ctrl : auditRecord
+                    end
+                else Claim denied, already sent or currently in flight
+                    note over Ctrl
+                        Another scheduler owns the dispatch lease,
+                        or this reminder has already been sent.
+                        Skip sending on this run.
+                    end note
+                end
+            end
+        end
+    end
+end
+Ctrl --> Scheduler : completed
+ deactivate Ctrl
+@enduml

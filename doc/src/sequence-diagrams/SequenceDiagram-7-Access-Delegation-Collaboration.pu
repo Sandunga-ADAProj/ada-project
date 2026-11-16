@@ -22,10 +22,10 @@ skinparam note {
     FontName monospace
 }
 
-title Sequence Diagram - Authentication, Account Delegation & Contextual Collaboration (UC-01, UC-02, UC-04, UC-27, UR-1.1, UR-2.2, FR-2.8)
-
-actor Staff as "staffUser : Base User"
-actor Admin as "adminUser : Administrator"
+title Sequence Diagram - Authentication, Account Delegation & Contextual Collaboration (UC-01, UC-02, UC-04, UC-27, UR-1.1, UR-2.2, FR-2.8, FR-6.2, FR-7.3, FR-7.5.3)
+actor Staff as "staffUser : User"
+actor Admin as "adminUser : Admin"
+actor Scheduler as "delegationScheduler : SystemDaemon"
 
 ' ─────────────────────────────────────────────────────────────────────────────
 ' PARTICIPANTS — aligned with ComponentsDiagram.pu
@@ -47,9 +47,7 @@ actor Admin as "adminUser : Administrator"
 ' ─────────────────────────────────────────────────────────────────────────────
 
 box "Presentation Layer" #F5F7FA
-    ' PortalDashboardView — name from ComponentsDiagram (<<boundary>>)
-    participant PView as "portalView : PortalDashboardView" <<boundary>>
-    ' InvoicingAndReconciliationView — name from ComponentsDiagram (<<boundary>>)
+    participant PView as "portalView : PortalDashboardSummaryView" <<boundary>>
     participant IView as "invoicingView : InvoicingAndReconciliationView" <<boundary>>
 end box
 
@@ -74,85 +72,191 @@ end box
 
 autonumber "<b>[00]</b>"
 
-== Step 1: Authentication & Dashboard Retrieval (UC-01, UC-02, UR-1.1, UR-1.3) ==
 
-Staff -> PView : onLoginClicked("staff@company.com", "secretHash")
+== Step 1: Authentication & Dashboard Retrieval (UC-01, UC-02, UR-1.1, FR-6.2, FR-7.5.3) ==
+
+Staff -> PView : onLoginClicked(email, password)
 activate PView
 
-' PView → AccessAndConfigController via AccessConfigAPI (ComponentsDiagram)
-PView -> ACtrl : authenticateUser("staff@company.com", "secretHash")
+PView -> ACtrl : authenticateUser(email, password)
 activate ACtrl
 
-' ACtrl → User & Access domain via UserAPI (ComponentsDiagram)
-ACtrl -> User : verifyCredentials("secretHash")
-activate User
-User --> ACtrl : return isAuthenticated (true)
-deactivate User
+ACtrl -> ACtrl : checkAccountStatusAndLockout(email)
 
-ACtrl -> ACtrl : getDashboardSummary(authenticatedUser)
-activate ACtrl
+alt Account temporarily blocked
+
+    ACtrl --> PView : Authentication denied
+    PView --> Staff : Display account lockout message
+
+else Account allowed to authenticate
+
+    ACtrl -> ACtrl : verifyPasswordAgainstStoredHash(email, password)
+
+    alt Credentials valid
+
+        ACtrl -> ACtrl : resetFailedLoginAttempts(email)
+        ACtrl --> PView : true
+
+        PView -> ACtrl : getDashboardSummary(staffUser)
+        ACtrl --> PView : dashboardData
+
+        PView -> PView : renderDashboardSummary(dashboardData)
+        PView --> Staff : Display personalized dashboard
+
+    else Credentials invalid
+
+        ACtrl -> ACtrl : recordFailedLoginAttempt(email)
+
+        opt Three consecutive failed login attempts
+            ACtrl -> ACtrl : blockAuthentication(email, 5 minutes)
+        end
+
+        ACtrl --> PView : false
+        PView --> Staff : Display authentication error
+
+    end
+end
+
 deactivate ACtrl
-
-ACtrl --> PView : renderDashboardSummary(dashboardData)
-deactivate ACtrl
-
-PView --> Staff : Displays customized dashboard overview
 deactivate PView
 
-== Step 2: Time-Bound Permission Delegation (UC-27, UR-2.2) ==
+
+== Step 2: Time-Bound Permission Delegation (UC-27, UR-2.2, FR-7.3.1) ==
 
 Admin -> PView : onDelegateAccessClicked(granteeUser, customerScope, validUntil)
 activate PView
 
-' PView → AccessAndConfigController via AccessConfigAPI (ComponentsDiagram)
 PView -> ACtrl : delegateAccountAccess(adminUser, staffUser, granteeUser, customerScope, validUntil)
 activate ACtrl
 
-' ACtrl → User & Access domain via UserAPI (ComponentsDiagram)
-' AccountDelegation is an entity within the User & Access subdomain
-create Delegation
-ACtrl --> Delegation : <<create>> (startDate=today, validUntil=validUntil, scope=customerScope, status=ACTIVE)
-activate Delegation
-Delegation --> ACtrl : return delegation
-deactivate Delegation
+ACtrl -> ACtrl : validateDelegation(adminUser, staffUser, granteeUser, customerScope, validUntil)
 
-ref over ACtrl, Delegation : ref DS-BASE: Delegation Audit Trail & Security Notification (UR-2.2)
+alt Administrator unauthorized or delegation invalid
 
-ACtrl --> PView : renderDelegationSuccess(delegation)
+    ACtrl --> PView : Delegation rejected
+    PView --> Admin : Display authorization or validation error
+
+else Delegation permitted
+
+    create Delegation
+    ACtrl -> Delegation : <<create>> (originalAssignee=staffUser, grantee=granteeUser, scope=customerScope, startDate=today, validUntil, status=ACTIVE)
+    activate Delegation
+    Delegation --> ACtrl : delegation
+    deactivate Delegation
+
+    note over Delegation
+        Original account assignment is preserved.
+        Delegated access is restricted to the
+        authorized scope and validity period.
+    end note
+
+    ref over ACtrl, Delegation : DS-BASE: Delegation Audit & Security Notification
+
+    ACtrl --> PView : delegation
+    PView -> PView : renderDelegationSuccess(delegation)
+    PView --> Admin : Display active delegation
+
+end
+
+deactivate ACtrl
+deactivate PView
+
+
+== Step 2B: Automatic Expiration & Manual Revocation (UR-2.2, FR-7.3.2) ==
+
+Scheduler -> ACtrl : expireDelegations(today)
+activate ACtrl
+
+opt Delegation is ACTIVE and today > validUntil
+
+    ACtrl -> Delegation : expire()
+    activate Delegation
+    Delegation --> ACtrl : status=EXPIRED
+    deactivate Delegation
+
+    ref over ACtrl, Delegation : DS-BASE: Delegation Expiration Audit
+
+end
+
 deactivate ACtrl
 
-PView --> Admin : Displays active delegated access entry
+Admin -> PView : onRevokeDelegationClicked(delegationId)
+activate PView
+
+PView -> ACtrl : revokeAccountDelegation(adminUser, delegation)
+activate ACtrl
+
+ACtrl -> ACtrl : validateRevocationPermission(adminUser, delegation)
+
+alt Revocation permitted and delegation ACTIVE
+
+    ACtrl -> Delegation : revoke()
+    activate Delegation
+    Delegation --> ACtrl : status=REVOKED
+    deactivate Delegation
+
+    ref over ACtrl, Delegation : DS-BASE: Delegation Revocation Audit
+
+    ACtrl --> PView : true
+    PView --> Admin : Display revocation confirmation
+
+else Revocation not permitted
+
+    ACtrl --> PView : false
+    PView --> Admin : Display validation error
+
+end
+
+deactivate ACtrl
 deactivate PView
+
 
 == Step 3: Contextual Invoice Collaboration & Mentions (UC-04, FR-2.8) ==
 
-Staff -> IView : onAddCommentClicked(invoiceNumber, text="@admin Please review tax rate")
+Staff -> IView : onAddCommentClicked(invoiceNumber, text)
 activate IView
 
-' IView → InvoicingAndBillingController via InvoicingBillingAPI (ComponentsDiagram)
-IView -> ICtrl : postInvoiceComment(staffUser, targetInvoice, "@admin Please review tax rate")
+IView -> ICtrl : postInvoiceComment(staffUser, targetInvoice, text)
 activate ICtrl
 
-' ICtrl → Invoice Management domain via InvoiceAPI (ComponentsDiagram)
-create Comment
-ICtrl --> Comment : <<create>> (text="@admin Please review tax rate", createdAt=now(), mentions=["admin"])
-activate Comment
-Comment --> ICtrl : return contextComment
-deactivate Comment
+ICtrl -> ICtrl : checkCommentPermission(staffUser, targetInvoice)
 
-ICtrl -> Invoice : addComment(contextComment)
-activate Invoice
-Invoice --> ICtrl : return true
-deactivate Invoice
+alt User not authorized to access invoice
 
-' Targeted mention notification via NotificationGateway (ComponentsDiagram)
-' ICtrl uses NotificationGateway port → NotificationServiceAdapter → SMTP
-ref over ICtrl, Comment : ref DS-BASE: Targeted Mention Notification Dispatch (FR-2.8)
+    ICtrl --> IView : Comment rejected
+    IView --> Staff : Display permission error
 
-ICtrl --> IView : renderInvoiceDetails(targetInvoice, commentsList)
+else User authorized
+
+    ICtrl -> ICtrl : mentionedUsers = resolveMentions(text)
+
+    create Comment
+    ICtrl -> Comment : <<create>> (author=staffUser, text=text, createdAt=now(), mentions=mentionedUsers)
+    activate Comment
+    Comment --> ICtrl : contextComment
+    deactivate Comment
+
+    ICtrl -> Invoice : addComment(contextComment)
+    activate Invoice
+    Invoice --> ICtrl : true
+    deactivate Invoice
+
+    opt Comment contains valid user mentions
+
+        ref over ICtrl, Comment : DS-BASE: Targeted Mention Notification (FR-2.8)
+
+    end
+
+    ref over ICtrl, Comment : DS-BASE: Comment Creation Audit
+
+    ICtrl --> IView : updatedComments
+    IView -> IView : renderInvoiceDetails(targetInvoice, updatedComments)
+    IView --> Staff : Display updated invoice comments
+
+end
+
 deactivate ICtrl
-
-IView --> Staff : Displays refreshed comment thread with highlighted @mention
 deactivate IView
+
 
 @enduml
