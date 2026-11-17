@@ -6,7 +6,9 @@ skinparam participant {
     BorderColor #2B3E6A
     FontColor #000000
 }
-skinparam arrow { Color #2B3E6A }
+skinparam arrow {
+    Color #2B3E6A
+}
 skinparam note {
     BackgroundColor #FDE2B8
     BorderColor #2B3E6A
