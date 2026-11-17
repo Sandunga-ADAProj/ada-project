@@ -5,392 +5,106 @@ hide empty fields
 hide <<enum>> empty members
 skinparam classAttributeIconSize 0
 
-' Class styling
+' --- Styling ---
 skinparam class {
     BackgroundColor #FFFFFF
     BorderColor #2B3E6A
     FontColor #000000
+    ArrowColor #2B3E6A
 }
 
-' Note styling
-skinparam note {
-    BackgroundColor #FDE2B8
-    BorderColor #2B3E6A
-    FontColor #000000
-    FontName monospace
+skinparam package {
+    BackgroundColor #F8FAFC
+    BorderColor #64748B
+    FontColor #1E293B
 }
 
-' Arrow styling
-skinparam arrow {
-    Color #2B3E6A
-}
-
-' ==========================================
+' ==========================================================
 ' 1) PRESENTATION LAYER (BOUNDARIES)
-' ==========================================
+' ==========================================================
 package "com.invoicingsystem.presentation" {
-    class PortalDashboardSummaryView <<boundary>> {
-        + renderLoginForm(): void
-        + renderDashboardSummary(dashboard: DashboardSummary): void
-        + renderSearchResults(records: List<SearchResult>): void
-        + onSavePreferencesClicked(prefs: UserPreferences): void
-        + onLoginClicked(email: String, password: String): void
-        + onAddFavoriteClicked(reference: EntityReference): void
-        + onRemoveFavoriteClicked(reference: EntityReference): void
-        + renderFavorites(records: List<EntityReference>): void
-        + renderRecentlyViewed(records: List<EntityReference>): void
-        + onDelegateAccessClicked(grantee: User, scope: Customer, validUntil: LocalDate): void
-        + renderDelegationSuccess(delegation: AccountDelegation): void
-        + onRevokeDelegationClicked(delegationId: String): void
-        + onLogoutClicked(sessionId: String): void
+    class CustomerManagementView <<boundary>> {
+        + handleCustomerRegistration(data: CustomerRegistrationData): void
+        + handleSubscriptionSetup(customerId: String, planId: String, startDate: LocalDate): void
+        + handleCommercialException(subId: String, type: String, val: BigDecimal): void
+        + handleCancellationRequest(customerId: String, reason: String): void
+        + handleContactAnonymization(contactId: String): void
     }
 
-    class CustomerManagementView <<boundary>> {
-        + renderRegistrationForm(): void
-        + renderContactsList(contacts: List<Contact>): void
-        + renderSubscriptionSetup(plans: List<BillingPlan>): void
-        + onRequestCancellationClicked(customerId: String, reason: String): void
-        + onRegisterCustomerClicked(data: CustomerRegistrationData): void
-        + onVerifyCompanyEmailClicked(customerId: String, token: String): void
-        + onAnonymizeContactClicked(customerId: String, targetContactId: String): void
-        + onSetupSubscriptionClicked(customerId: String, planId: String, futureStartDate: LocalDate): void
-        + renderSubscriptionSetup(subscription: Subscription): void
-        + onProposeExceptionClicked(subId: String, type: String, value: BigDecimal): void
-        + renderExceptionSubmitted(ex: CommercialException): void
-        + onProcessExceptionClicked(exceptionId: String, approved: boolean): void
-        + renderCancellationSubmitted(req: CancellationRequest): void
-        + onReviewCancellationClicked(requestId: String): void
-        + onProcessCancellationClicked(requestId: String, approved: boolean): void
-        + renderCancellationReview(summary: CancellationReviewSummary): void
-        + renderCancellationProcessed(approved: boolean): void
-        + onUploadCustomerAttachmentClicked(customerId: String, file: AttachmentUploadRequest): void
-        + onCustomerTimelineClicked(customerId: String): void
-        + renderCustomerTimeline(customer: Customer, events: List<CustomerTimelineEntry>): void
+    class PortalDashboardView <<boundary>> {
+        + displayDashboard(): void
     }
 }
 
-' ==========================================
-' 2) APPLICATION LOGIC LAYER (CONTROLS & DTOs & SERVICES)
-' ==========================================
+' ==========================================================
+' 2) APPLICATION LOGIC LAYER (CONTROLS & SERVICES)
+' ==========================================================
 package "com.invoicingsystem.application" {
-    class CustomerAndSubscriptionController <<control>> {
-        - notifier: NotificationGateway
-        - auditTrail: AuditTrailService
-        - attachments: AttachmentService
-        - auditRead: AuditRecordRepository
-        + registerCustomer(admin: Admin, data: CustomerRegistrationData): Customer
-        + manageContacts(admin: Admin, customer: Customer): boolean
-        + setCustomerTags(admin: Admin, customer: Customer, tags: List<String>): boolean
-        + getCustomerTimeline(user: User, customer: Customer): List<CustomerTimelineEntry>
-        + uploadCustomerAttachment(admin: Admin, customer: Customer, file: AttachmentUploadRequest): DocumentAttachment
-        + verifyCompanyEmail(customerId: String, token: String): boolean
-        + anonymizeContactData(admin: Admin, targetContact: Contact): boolean
-        + configureSubscription(admin: Admin, customer: Customer, plan: BillingPlan, startDate: LocalDate): Subscription
-        + submitCommercialException(user: User, sub: Subscription, type: String, val: BigDecimal): CommercialException
-        + approveCommercialException(approver: Admin, ex: CommercialException, approved: boolean): boolean
-        + handleCancellationWorkflow(user: User, customer: Customer, reason: String): CancellationRequest
-        + getCancellationReview(admin: Admin, req: CancellationRequest): CancellationReviewSummary
-        + processCancellationRequest(admin: Admin, req: CancellationRequest, approved: boolean): boolean
-        - detectPotentialDuplicates(taxId: String, legalName: String): List<Customer>
-        - generateVerificationToken(customer: Customer): String
-        - buildVerificationLink(token: String): String
-        - validateVerificationToken(customerId: String, token: String): boolean
-        - checkAnonymizationAllowed(customer: Customer, targetContact: Contact): boolean
-        - calculateDiscountedPrice(sub: Subscription, discountFraction: BigDecimal): BigDecimal
-        - hasRequiredApprovalAuthority(approver: Admin, ex: CommercialException): boolean
-        - validateCancellationRequest(user: User, customer: Customer): boolean
-        - prepareMinimumAuthorizedAccountDetails(customer: Customer): CancellationReviewSummary
-        - validateCancellationDecision(admin: Admin, req: CancellationRequest): boolean
-    }
-
-    class AccessAndConfigController <<control>> {
-        - auditTrail: AuditTrailService
-        - sessionManager: SessionManagementService
-        + logout(sessionId: String): boolean
-        + deactivateUserAccount(admin: Admin, targetUser: User): boolean
-        + expireInactiveSessions(now: LocalDateTime): int
-        + authenticateUser(email: String, password: String): boolean
-        + getDashboardSummary(user: User): DashboardSummary
-        + delegateAccountAccess(admin: Admin, originalAssignee: User, grantee: User, scope: Customer, validUntil: LocalDate): AccountDelegation
-        + revokeAccountDelegation(admin: Admin, delegation: AccountDelegation): boolean
-        + expireDelegations(date: LocalDate): void
-        + createCustomRole(superAdmin: SuperAdmin, name: String, permissions: Set<String>): AccessRole
-        + assignCustomRole(superAdmin: SuperAdmin, user: User, role: AccessRole): boolean
-        + revokeCustomRole(superAdmin: SuperAdmin, user: User, role: AccessRole): boolean
-        + assignSubstituteApprover(admin: Admin, primary: Admin, substitute: Admin, scope: String, validUntil: LocalDate): SubstituteApproverAssignment
-        + revokeSubstituteApprover(admin: Admin, assignment: SubstituteApproverAssignment): boolean
-        + expireSubstituteAssignments(today: LocalDate): void
-        + addFavorite(user: User, reference: EntityReference): boolean
-        + removeFavorite(user: User, reference: EntityReference): boolean
-        + recordRecentlyViewed(user: User, reference: EntityReference): void
-        + getFavorites(user: User): List<EntityReference>
-        + getRecentlyViewed(user: User): List<EntityReference>
-        + updateStandardPricingAndTargets(superAdmin: SuperAdmin, plan: BillingPlan): boolean
-        + updatePermissionsAndRules(superAdmin: SuperAdmin, user: User, permissions: Set<String>, rule: BusinessRule): boolean
-        - checkAccountStatusAndLockout(email: String): boolean
-        - verifyPasswordAgainstStoredHash(email: String, password: String): boolean
-        - resetFailedLoginAttempts(email: String): void
-        - recordFailedLoginAttempt(email: String): void
-        - blockAuthentication(email: String, durationMinutes: int): void
-        - validateDelegation(admin: Admin, originalAssignee: User, grantee: User, scope: Customer, validUntil: LocalDate): boolean
-        - validateRevocationPermission(admin: Admin, delegation: AccountDelegation): boolean
-        - validateSubstituteAuthority(admin: Admin, primary: Admin, substitute: Admin, scope: String): boolean
-    }
-
-    class DashboardSummary <<DTO>> {
-        + outstandingBalance: BigDecimal
-        + pendingInvoices: int
-        + unmatchedPayments: int
-    }
-
-    class SearchResult <<DTO>> {
-        + entityType: String
-        + recordId: String
-        + displayLabel: String
-    }
-
-    class CustomerRegistrationData <<DTO>> {
-        + commercialName: String
-        + tradingName: String
-        + legalName: String
-        + taxId: String
-        + taxAddress: String
-        + country: String
-        + currency: String
-        + companyEmail: String
-        + primaryContactName: String
-        + primaryContactEmail: String
-        + primaryContactPhone: String
-    }
-
-    class CustomerTimelineEntry <<DTO>> {
-        + occurredAt: LocalDateTime
-        + eventType: String
-        + description: String
-        + actorId: String
-        + relatedEntityId: String
-    }
-
-    class AttachmentUploadRequest <<DTO>> {
-        + fileName: String
-        + mediaType: String
-        + sizeBytes: long
-        + content: byte[]
-    }
-
-    class CancellationReviewSummary <<DTO>> {
-        + customerId: String
-        + requestReason: String
-        + outstandingBalance: BigDecimal
-        + authorizedAccountDetails: List<String>
-    }
-
-    class AttachmentService <<service>> {
-        - storage: FileStorageGateway
-        - auditTrail: AuditTrailService
-        + uploadForCustomer(admin: Admin, customer: Customer, file: AttachmentUploadRequest): DocumentAttachment
-        + uploadForInvoice(admin: Admin, invoice: Invoice, file: AttachmentUploadRequest): DocumentAttachment
-        - validateUploadPermissionAndType(admin: Admin, file: AttachmentUploadRequest): boolean
+    class CustomerSubscriptionController <<control>> {
+        - notificationGateway: NotificationGateway
+        - fileStorage: FileStorageGateway
+        - auditService: AuditTrailService
+        + registerCustomer(name: String, taxId: String, email: String, country: String): Customer
+        + addContact(customerId: String, contact: Contact): boolean
+        + anonymizeContact(contactId: String): boolean
+        + createSubscription(customerId: String, plan: BillingPlan, startDate: LocalDate): Subscription
+        + proposeCommercialException(subId: String, type: String, val: BigDecimal): CommercialException
+        + approveCommercialException(exceptionId: String, approver: User, approved: boolean): boolean
+        + requestCancellation(customerId: String, user: User, reason: String): CancellationRequest
+        + processCancellation(requestId: String, approver: User, approved: boolean): boolean
+        + getCustomerTimeline(customerId: String): List<CustomerTimelineEntry>
     }
 
     class AuditTrailService <<service>> {
-        - repository: AuditRecordRepository
-        + recordChange(entityType: String, entityId: String, actorId: String, oldValue: String, newValue: String): ChangeHistoryRecord
-        + persistAuditRecord(record: ChangeHistoryRecord): void
-        + recordRejectedOperation(actorId: String, reason: String): void
-    }
-
-    class SessionManagementService <<service>> {
-        - inactivityTimeoutMinutes: int
-        + createSession(user: User, now: LocalDateTime): UserSession
-        + recordActivity(sessionId: String, now: LocalDateTime): boolean
-        + endSession(sessionId: String): boolean
-        + expireInactiveSessions(now: LocalDateTime): int
-        + invalidateAllForUser(user: User): int
-        + configureInactivityTimeout(minutes: int): void
+        + logOperation(actor: User, action: String, targetEntity: String, details: String): void
     }
 }
 
-' ==========================================
-' 3) CORE DOMAIN LAYER (ENTITIES & CONTRACTS)
-' ==========================================
+' ==========================================================
+' 3) DOMAIN LAYER (ENTITIES, ENUMS & PORTS)
+' ==========================================================
 package "com.invoicingsystem.domain" {
 
-    ' --- Enumerations ---
-    enum UserState {
-        ACTIVE
-        INACTIVE
-        BLOCKED
-    }
-
-    enum SubscriptionStatus {
-        PENDING_ACTIVATION
+    enum CustomerStatus {
+        PENDING_VERIFICATION
         ACTIVE
         SUSPENDED
         CANCELLED
     }
 
-    enum AccountStanding <<enum>> {
+    enum AccountStanding {
         UP_TO_DATE
         OVERDUE
         SUSPENDED
         IN_DISPUTE
     }
 
-    enum ContactState <<enum>> {
+    enum ContactState {
         ACTIVE
         INACTIVE
         ANONYMIZED
     }
 
-    enum CustomerStatus {
-        PENDING_VERIFICATION
-        PENDING_ACTIVATION
-        ACTIVE
-        SUSPENDED
-        CANCELLED
-    }
-
-    enum ApprovalStatus <<enum>> {
+    enum ApprovalStatus {
         PENDING
         APPROVED
         REJECTED
     }
 
-    enum PriceReviewKind {
-        COMMERCIAL_EXCEPTION
-        ANNUAL
-    }
-
-    ' --- Domain Interfaces (Contracts) ---
-    interface NotificationGateway <<interface>> {
-        + sendNotification(recipientEmail: String, subject: String, body: String): boolean
-        + sendNotification(recipientEmail: String, subject: String, body: String, idempotencyKey: String): boolean
-        + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
-    }
-
-    interface AuditRecordRepository <<interface>> {
-        + save(record: ChangeHistoryRecord): void
-        + findByEntity(entityType: String, entityId: String): List<ChangeHistoryRecord>
-    }
-
-    interface FileStorageGateway <<interface>> {
-        + scanAndStore(fileName: String, mediaType: String, content: byte[]): String
-        + deleteStoredFile(storageKey: String): boolean
-    }
-
-    ' --- Entities & Value Objects ---
-    class UserPreferences {
-        - language: String
-        - fontScale: double
-        - highContrast: boolean
-        - favoriteRecords: List<EntityReference>
-        - recentlyViewedRecords: List<EntityReference>
-        + addFavorite(reference: EntityReference): void
-        + removeFavorite(reference: EntityReference): void
-        + recordRecentView(reference: EntityReference): void
-    }
-
-    class EntityReference <<value object>> {
-        + entityType: String
-        + entityId: String
-        + displayLabel: String
-    }
-
-    class PriceReview {
-        - reviewId: String
-        - kind: PriceReviewKind
-        - proposedPrice: BigDecimal
-        - previousPrice: BigDecimal
-        - approvedPrice: BigDecimal
-        - effectiveFrom: LocalDate
-        - reviewedAt: LocalDateTime
-        - dataSources: List<String>
-        - reason: String
-        - status: ApprovalStatus
-        + setStatus(newStatus: ApprovalStatus): void
-        + recordAnnualDecision(approver: Admin, price: BigDecimal, effectiveFrom: LocalDate): void
-    }
-
-    class DocumentAttachment {
-        - attachmentId: String
-        - fileName: String
-        - mediaType: String
-        - sizeBytes: long
-        - storageKey: String
-        - uploadedAt: LocalDateTime
-    }
-
-    class ChangeHistoryRecord {
-        - recordId: String
-        - entityType: String
-        - entityId: String
-        - changeType: String
-        - actorId: String
-        - timestamp: LocalDateTime
-        - previousValue: String
-        - newValue: String
-    }
-
-    class User {
-        - userId: String
-        - email: String
-        - passwordHash: String
-        - state: UserState
-        - permissions: Set<String>
-        - roles: Set<AccessRole>
-        - failedLoginAttempts: int
-        - lockedUntil: LocalDateTime
-        + configureUserPreferences(prefs: UserPreferences): void
-        + proposeCommercialException(sub: Subscription, type: String, value: BigDecimal): CommercialException
-        + requestAccCancellation(customer: Customer, reason: String): CancellationRequest
-        + deactivate(): void
-        + assignRole(role: AccessRole): void
-        + revokeRole(role: AccessRole): void
-        + hasPermission(permission: String): boolean
-    }
-
-    class Admin {
-        + registerCustomerProfile(legalName: String, taxId: String, country: String, companyEmail: String): Customer        
-        + manageCustomerContacts(customer: Customer): boolean
-        + anonymizeContactData(contact: Contact): boolean
-        + setUpSubsPlan(customer: Customer, plan: BillingPlan): Subscription
-        + approveCommercialEx(ex: CommercialException): boolean
-        + reviewFlaggedPrices(): List<PriceReview>
-        + processAccCancellation(req: CancellationRequest): boolean
-        + authorizeAccountDelegation(delegation: AccountDelegation): boolean
-    }
-
-    class SuperAdmin {
-        + configStandardPricing(plan: BillingPlan): boolean
-        + configStandardTargets(month: YearMonth, target: BigDecimal): boolean
-    }
-
     class Customer {
         - customerId: String
-        - commercialName: String
-        - tradingName: String
         - legalName: String
+        - commercialName: String
         - taxId: String
-        - taxAddress: String
-        - country: String
-        - currency: String
         - companyEmail: String
-        - emailVerified: boolean
         - status: CustomerStatus
         - standing: AccountStanding
         - tags: List<String>
-        + markEmailVerified(): void
-        + addContact(contact: Contact): Contact
-        + deactivateContact(contact: Contact): boolean
-        + addSubscription(subscription: Subscription): boolean
-        + getSubscriptions(): List<Subscription>
-        + linkInvoice(invoice: Invoice): boolean
-        + setStatus(newStatus: CustomerStatus): void
-        + setStanding(newStanding: AccountStanding): void
         + hasCompleteTaxInfo(): boolean
         + getOutstandingBalance(): BigDecimal
-        + setTags(tags: List<String>): void
+        + updateStanding(standing: AccountStanding): void
+        + addContact(contact: Contact): void
+        + addSubscription(sub: Subscription): void
     }
 
     class Contact {
@@ -401,9 +115,11 @@ package "com.invoicingsystem.domain" {
         - isBillingContact: boolean
         - state: ContactState
         + anonymize(): void
+        + deactivate(): void
     }
 
     class BillingPlan {
+        - planId: String
         - name: String
         - basePrice: BigDecimal
         - minPrice: BigDecimal
@@ -416,167 +132,103 @@ package "com.invoicingsystem.domain" {
         - billingAnchorDay: int
         - paymentTermsDays: int
         - price: BigDecimal
-        - status: SubscriptionStatus
-        + activate(): boolean
-        + setStatus(newStatus: SubscriptionStatus): void
-        + setPrice(newPrice: BigDecimal): boolean
-        + applyApprovedPriceReview(review: PriceReview, currentDate: LocalDate): boolean
+        - active: boolean
         + getPriceOn(date: LocalDate): BigDecimal
+        + applyPriceReview(review: PriceReview): void
+        + activate(): boolean
+        + cancel(): void
     }
 
     class CommercialException {
+        - exceptionId: String
         - type: String
-        - value: BigDecimal
+        - discountValue: BigDecimal
         - startDate: LocalDate
         - endDate: LocalDate
         - status: ApprovalStatus
-        + approve(): void
-        + reject(): void
+        + approve(reviewer: User): void
+        + reject(reviewer: User): void
     }
 
-    ' Contextual Referenced Entities
     class CancellationRequest {
+        - requestId: String
         - requestDate: LocalDate
         - reason: String
-        - outstandingBalance: BigDecimal
         - status: ApprovalStatus
-        + approve(): void
-        + reject(): void
+        + approve(reviewer: User): void
+        + reject(reviewer: User): void
     }
 
-    class AccountDelegation {
-        - delegationId: String
+    class PriceReview {
+        - reviewId: String
+        - proposedPrice: BigDecimal
+        - approvedPrice: BigDecimal
+        - effectiveFrom: LocalDate
+        - status: ApprovalStatus
+        + approve(reviewer: User, finalPrice: BigDecimal): void
     }
 
-    class AccessRole {
-        - roleId: String
-    }
-
-    class SubstituteApproverAssignment {
-        - assignmentId: String
-    }
-
-    class BusinessRule {
-        - ruleId: String
-    }
-
-    class UserSession {
-        - sessionId: String
+    ' Reference entities from other subsystems
+    class User {
+        - userId: String
+        - email: String
+        + hasPermission(perm: String): boolean
     }
 
     class Invoice {
         - invoiceNumber: String
+        - status: String
+    }
+
+    ' Outbound ports
+    interface NotificationGateway <<interface>> {
+        + sendNotification(email: String, subject: String, body: String): boolean
+    }
+
+    interface FileStorageGateway <<interface>> {
+        + storeFile(name: String, content: byte[]): String
     }
 }
 
-' ==========================================
-' 4) INFRASTRUCTURE LAYER (EXTERNAL ADAPTERS)
-' ==========================================
+' ==========================================================
+' 4) INFRASTRUCTURE LAYER
+' ==========================================================
 package "com.invoicingsystem.infrastructure" {
-    class SecureFileStorageAdapter {
-        - storageRoot: String
-        - maxUploadBytes: long
-        + scanAndStore(fileName: String, mediaType: String, content: byte[]): String
-        + deleteStoredFile(storageKey: String): boolean
-        - rejectMaliciousFile(content: byte[]): void
+    class SecureCloudFileStorageAdapter {
+        + storeFile(name: String, content: byte[]): String
     }
-
-    class DatabaseAuditRecordRepository {
-        + save(record: ChangeHistoryRecord): void
-        + findByEntity(entityType: String, entityId: String): List<ChangeHistoryRecord>
-    }
-
-    class NotificationServiceAdapter {
-        - smtpHost: String
-        - gatewayApiKey: String
-        + sendNotification(recipientEmail: String, subject: String, body: String): boolean
-        + sendNotification(recipientEmail: String, subject: String, body: String, idempotencyKey: String): boolean
-        + scheduleReminder(invoiceNumber: String, sendDate: LocalDate): boolean
+    class SmtpNotificationAdapter {
+        + sendNotification(email: String, subject: String, body: String): boolean
     }
 }
 
-' ==========================================
-' RELATIONSHIPS & TRAFFIC BETWEEN PACKAGES
-' ==========================================
+' ==========================================================
+' 5) RELATIONSHIPS
+' ==========================================================
+CustomerManagementView ..> CustomerSubscriptionController
+PortalDashboardView ..> CustomerSubscriptionController
 
-' Boundary to Control links
-PortalDashboardSummaryView .down.> AccessAndConfigController
-CustomerManagementView .down.> CustomerAndSubscriptionController
+CustomerSubscriptionController ..> Customer
+CustomerSubscriptionController ..> Subscription
+CustomerSubscriptionController ..> NotificationGateway
+CustomerSubscriptionController ..> FileStorageGateway
+CustomerSubscriptionController ..> AuditTrailService
 
-' Control orchestrating Domain Entities & Gateways
-CustomerAndSubscriptionController .down.> Customer
-CustomerAndSubscriptionController .down.> Subscription
-CustomerAndSubscriptionController .down.> NotificationGateway
-CustomerAndSubscriptionController .down.> AttachmentService
-CustomerAndSubscriptionController .down.> AuditTrailService
+Customer "1" *-- "1..*" Contact : contacts
+Customer "1" *-- "0..*" Subscription : subscriptions
+Customer "1" *-- "0..*" CancellationRequest : cancellations
+Customer "1" --> "0..*" Invoice : invoices
 
-AccessAndConfigController .down.> User
-AccessAndConfigController .down.> BillingPlan
-AccessAndConfigController .down.> DashboardSummary
-AccessAndConfigController .down.> SearchResult
-AccessAndConfigController .down.> SessionManagementService
-AccessAndConfigController .down.> AuditTrailService
+Subscription "0..*" --> "1" BillingPlan : plan
+Subscription "1" *-- "0..*" CommercialException : exceptions
+Subscription "1" *-- "0..*" PriceReview : reviews
 
-AttachmentService .down.> FileStorageGateway
-AttachmentService .down.> DocumentAttachment
-AuditTrailService .down.> AuditRecordRepository
+CancellationRequest "0..*" --> "1" User : requestedBy
+CancellationRequest "0..*" --> "0..1" User : reviewedBy
+CommercialException "0..*" --> "1" User : proposedBy
+CommercialException "0..*" --> "0..1" User : approvedBy
 
-' Infrastructure Implementation (Plugs into Domain Ports)
-FileStorageGateway <|.. SecureFileStorageAdapter
-AuditRecordRepository <|.. DatabaseAuditRecordRepository
-NotificationGateway <|.. NotificationServiceAdapter
-
-' Inheritance Mapping
-User <|-- Admin
-Admin <|-- SuperAdmin
-
-' Domain Structural Relationships
-User "0..*" --> "0..*" Customer : " -assignedCustomers"
-User "1" --> "0..*" CancellationRequest : " -submittedRequests"
-User "1" *-- "0..1" UserPreferences : preferences
-UserPreferences "1" --> "0..*" EntityReference : favoriteOrRecent
-
-Customer "1" *-- "1..*" Contact : " -contacts"
-Customer "1" --> "0..*" Subscription : " -subscriptions"
-Customer "1" --> "0..*" CancellationRequest : " -cancellationRequests"
-Customer "1" --> "0..*" PriceReview : annualReviews
-Customer "1" o-- "0..*" DocumentAttachment : attachments
-User "1" --> "0..*" DocumentAttachment : uploadedBy
-
-Subscription "0..*" --> "1" BillingPlan : " -plan"
-Subscription "1" --> "0..*" CommercialException : " -exceptions"
-Subscription "1" --> "0..*" PriceReview : pricingReviews
-
-User "1" --> "0..*" CommercialException : " -proposedExceptions"
-Admin "0..1" --> "0..*" CommercialException : " -reviewedExceptions"
-Admin "0..1" --> "0..*" CancellationRequest : " -processedRequests"
-
-BillingPlan "1" --> "0..*" PriceReview : price reviews
-CommercialException "1" --> "0..1" PriceReview : flaggedReview
-SuperAdmin "0..*" --> "0..*" BillingPlan : " -configuredPlans"
-PriceReview "0..*" --> "0..1" Admin : approvedBy
-
-ChangeHistoryRecord "0..*" --> "0..1" User : changedBy
-
-note bottom of PriceReview
-    ANNUAL reviews identify accounts needing revenue or price checks.
-    Review sources and approval are recorded; new prices take
-    effect no earlier than effectiveFrom. Historical invoices
-    are never recalculated retroactively (FR-6.6.2).
-end note
-
-note bottom of DocumentAttachment
-    Each attachment belongs to exactly one parent:
-    either a Customer or an Invoice, not both.
-    Store file metadata and an opaque storage key only;
-    reject malicious uploads before storing files (NFR-5.5).
-    Access requires authorization to the parent record.
-end note
-
-note bottom of ChangeHistoryRecord
-    Persistent record of audited domain changes.
-    Controller lifelines in DS-BASE are generic placeholders;
-    they do not require a concrete ApplicationController class.
-end note
+FileStorageGateway <|.. SecureCloudFileStorageAdapter
+NotificationGateway <|.. SmtpNotificationAdapter
 
 @enduml
