@@ -1,0 +1,240 @@
+@startuml
+scale max 4096x4096
+hide circle
+hide empty fields
+hide <<enum>> empty members
+skinparam classAttributeIconSize 0
+
+' --- Styling ---
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+    ArrowColor #2B3E6A
+}
+
+skinparam package {
+    BackgroundColor #F8FAFC
+    BorderColor #64748B
+    FontColor #1E293B
+}
+
+' ==========================================================
+' 1) PRESENTATION LAYER (BOUNDARIES)
+' ==========================================================
+package "com.invoicingsystem.presentation" {
+    class InvoicingAndReconciliationView <<boundary>> {
+        + handleInvoiceIssuance(invoiceNumber: String): void
+        + handleManualReconciliation(txId: String, invoiceNumber: String): void
+        + handleExportDownload(periodId: String): void
+        + handleCommentPost(invoiceNumber: String, text: String): void
+    }
+}
+
+' ==========================================================
+' 2) APPLICATION LOGIC LAYER (CONTROLS & SERVICES)
+' ==========================================================
+package "com.invoicingsystem.application" {
+    class InvoicingAndBillingController <<control>> {
+        - calendarService: BusinessCalendarService
+        - notificationGateway: NotificationGateway
+        - auditService: AuditTrailService
+        + executeRecurringBillingBatch(executionDate: LocalDate): void
+        + issueAndSendInvoice(invoiceNumber: String): Invoice
+        + createAdHocInvoice(customerId: String, lines: List<InvoiceLine>): Invoice
+        + processScheduledReminders(date: LocalDate): void
+        + postInvoiceComment(invoiceNumber: String, author: User, text: String): Comment
+        + lockFinancialPeriod(periodId: String, user: User): boolean
+        + overridePeriodForInvoice(invoiceNumber: String, superAdmin: User, reason: String): boolean
+        + generateAccountingExport(periodId: String, requestedBy: User): AccountingExportPackage
+        + deleteTestInvoice(invoiceNumber: String, admin: User): boolean
+    }
+
+    class ReconciliationController <<control>> {
+        - bankingGateway: BankingPaymentGateway
+        - auditService: AuditTrailService
+        + runAutomatedReconciliation(): void
+        + resolveUnmatchedTransaction(txId: String, invoiceNumber: String, admin: User): boolean
+        + allocatePayment(tx: BankTransaction, invoice: Invoice, amount: BigDecimal): PaymentAllocation
+    }
+
+    class AuditTrailService <<service>> {
+        + logOperation(actor: User, action: String, targetEntity: String, details: String): void
+    }
+}
+
+' ==========================================================
+' 3) DOMAIN LAYER (ENTITIES, ENUMS & PORTS)
+' ==========================================================
+package "com.invoicingsystem.domain" {
+
+    enum InvoiceStatus {
+        DRAFT
+        READY
+        ISSUED
+        SENT
+        OVERDUE
+        PAID
+        PARTIALLY_RECONCILED
+    }
+
+    enum InvoiceType {
+        RECURRING
+        ONE_OFF
+        TEST
+    }
+
+    class Invoice {
+        - invoiceNumber: String
+        - type: InvoiceType
+        - status: InvoiceStatus
+        - issueDate: LocalDate
+        - dueDate: LocalDate
+        - subtotal: BigDecimal
+        - vatAmount: BigDecimal
+        - total: BigDecimal
+        + calculateTotals(): void
+        + changeStatus(newStatus: InvoiceStatus): boolean
+        + getOutstandingBalance(): BigDecimal
+        + isEditable(): boolean
+        + isReminderEligible(): boolean
+        + addLine(line: InvoiceLine): void
+        + addComment(comment: Comment): void
+    }
+
+    class InvoiceLine {
+        - description: String
+        - quantity: int
+        - unitPrice: BigDecimal
+        - taxRate: BigDecimal
+        + getLineTotal(): BigDecimal
+    }
+
+    class Comment {
+        - commentId: String
+        - text: String
+        - createdAt: LocalDateTime
+    }
+
+    class FinancialPeriod {
+        - periodId: String
+        - startDate: LocalDate
+        - endDate: LocalDate
+        - locked: boolean
+        + lock(): void
+        + unlock(): void
+        + isLocked(): boolean
+        + grantException(invoiceNumber: String): void
+    }
+
+    class AccountingExportPackage {
+        - exportId: String
+        - version: int
+        - generatedAt: LocalDateTime
+        - filePath: String
+        + isRegenerated(): boolean
+    }
+
+    class BankTransaction {
+        - txId: String
+        - reference: String
+        - amount: BigDecimal
+        - valueDate: LocalDate
+        - reconciled: boolean
+        + markReconciled(): void
+    }
+
+    class PaymentAllocation {
+        - allocationId: String
+        - amount: BigDecimal
+        - allocationDate: LocalDate
+    }
+
+    ' External domain references
+    class Customer {
+        - customerId: String
+        - legalName: String
+        + hasCompleteTaxInfo(): boolean
+    }
+
+    class Subscription {
+        - subscriptionId: String
+        - price: BigDecimal
+    }
+
+    class User {
+        - userId: String
+        - email: String
+        + hasPermission(perm: String): boolean
+    }
+
+    ' Outbound ports
+    interface BankingPaymentGateway <<interface>> {
+        + fetchTransactionsSince(checkpoint: LocalDateTime): List<BankTransaction>
+    }
+
+    interface BusinessCalendarService <<interface>> {
+        + isWorkingDay(date: LocalDate, country: String): boolean
+        + getNextWorkingDay(date: LocalDate, country: String): LocalDate
+    }
+
+    interface NotificationGateway <<interface>> {
+        + sendNotification(email: String, subject: String, body: String): boolean
+    }
+}
+
+' ==========================================================
+' 4) INFRASTRUCTURE LAYER
+' ==========================================================
+package "com.invoicingsystem.infrastructure" {
+    class BankingApiAdapter {
+        + fetchTransactionsSince(checkpoint: LocalDateTime): List<BankTransaction>
+    }
+
+    class RegionalCalendarAdapter {
+        + isWorkingDay(date: LocalDate, country: String): boolean
+        + getNextWorkingDay(date: LocalDate, country: String): LocalDate
+    }
+
+    class SmtpNotificationAdapter {
+        + sendNotification(email: String, subject: String, body: String): boolean
+    }
+}
+
+' ==========================================================
+' 5) RELATIONSHIPS
+' ==========================================================
+InvoicingAndReconciliationView ..> InvoicingAndBillingController
+InvoicingAndReconciliationView ..> ReconciliationController
+
+InvoicingAndBillingController ..> Invoice
+InvoicingAndBillingController ..> FinancialPeriod
+InvoicingAndBillingController ..> NotificationGateway
+InvoicingAndBillingController ..> BusinessCalendarService
+InvoicingAndBillingController ..> AuditTrailService
+
+ReconciliationController ..> BankTransaction
+ReconciliationController ..> Invoice
+ReconciliationController ..> BankingPaymentGateway
+ReconciliationController ..> AuditTrailService
+
+Customer "1" --> "0..*" Invoice : invoices
+Subscription "0..1" --> "0..*" Invoice : generatedInvoices
+
+Invoice "1" *-- "1..*" InvoiceLine : lines
+Invoice "1" *-- "0..*" Comment : comments
+Invoice "0..*" --> "1" FinancialPeriod : period
+Comment "0..*" --> "1" User : author
+Comment "0..*" --> "0..*" User : mentions
+
+BankTransaction "1" -- "0..*" PaymentAllocation : allocations
+Invoice "1" -- "0..*" PaymentAllocation : payments
+
+AccountingExportPackage "0..*" --> "1" FinancialPeriod : period
+AccountingExportPackage "0..*" --> "1" User : requestedBy
+
+BankingPaymentGateway <|.. BankingApiAdapter
+BusinessCalendarService <|.. RegionalCalendarAdapter
+NotificationGateway <|.. SmtpNotificationAdapter
+
+@enduml

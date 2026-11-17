@@ -1,0 +1,211 @@
+@startuml
+scale max 4096x4096
+hide circle
+hide empty fields
+hide <<enum>> empty members
+skinparam classAttributeIconSize 0
+
+' --- Styling ---
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B3E6A
+    FontColor #000000
+    ArrowColor #2B3E6A
+}
+
+skinparam package {
+    BackgroundColor #F8FAFC
+    BorderColor #64748B
+    FontColor #1E293B
+}
+
+' ==========================================================
+' 1) PRESENTATION LAYER (BOUNDARIES)
+' ==========================================================
+package "com.invoicingsystem.presentation" {
+    class SystemAdministrationView <<boundary>> {
+        + handleUserRoleAssignment(userId: String, roleId: String): void
+        + handleAccountDelegation(granteeId: String, customerId: String, until: LocalDate): void
+        + handleSubstituteAssignment(primaryId: String, substituteId: String, scope: String): void
+        + handleNotificationRuleConfig(rule: NotificationRule): void
+        + handleSystemRuleConfig(rule: BusinessRule): void
+    }
+
+    class PortalDashboardView <<boundary>> {
+        + handlePreferencesUpdate(prefs: UserPreferences): void
+        + handleLogin(email: String): void
+    }
+}
+
+' ==========================================================
+' 2) APPLICATION LOGIC LAYER (CONTROLS & SERVICES)
+' ==========================================================
+package "com.invoicingsystem.application" {
+    class AccessAndSecurityController <<control>> {
+        - auditService: AuditTrailService
+        - notificationGateway: NotificationGateway
+        + authenticate(email: String, password: String): boolean
+        + delegateAccountAccess(granter: User, grantee: User, customer: Customer, validUntil: LocalDate): AccountDelegation
+        + revokeDelegation(delegationId: String): boolean
+        + assignSubstituteApprover(primary: User, substitute: User, scope: String, validUntil: LocalDate): SubstituteApproverAssignment
+        + revokeSubstitute(assignmentId: String): boolean
+        + createRole(name: String, permissions: Set<String>): AccessRole
+        + assignRole(targetUser: User, role: AccessRole): void
+        + updateSystemRules(rule: BusinessRule): void
+        + updateNotificationRules(rule: NotificationRule): void
+        + expireDelegations(currentDate: LocalDate): void
+    }
+
+    class AuditTrailService <<service>> {
+        + logOperation(actor: User, action: String, targetEntity: String, details: String): void
+        + getAuditLog(entityName: String, entityId: String): List<ChangeHistoryRecord>
+    }
+}
+
+' ==========================================================
+' 3) DOMAIN LAYER (ENTITIES, ENUMS & PORTS)
+' ==========================================================
+package "com.invoicingsystem.domain" {
+
+    enum DelegationStatus {
+        ACTIVE
+        EXPIRED
+        REVOKED
+    }
+
+    ' Identity & Access Control (RBAC sin jerarquía estática)
+    class User {
+        - userId: String
+        - email: String
+        - active: boolean
+        - failedLoginAttempts: int
+        - preferences: UserPreferences
+        + hasPermission(permission: String): boolean
+        + hasRole(roleName: String): boolean
+        + isAccountNonLocked(): boolean
+        + deactivate(): void
+    }
+
+    class AccessRole {
+        - roleId: String
+        - name: String
+        - permissions: Set<String>
+        + grantPermission(permission: String): void
+        + revokePermission(permission: String): void
+    }
+
+    class AccountDelegation {
+        - delegationId: String
+        - startDate: LocalDate
+        - validUntil: LocalDate
+        - status: DelegationStatus
+        + isActive(onDate: LocalDate): boolean
+        + revoke(): void
+    }
+
+    class SubstituteApproverAssignment {
+        - assignmentId: String
+        - approvalScope: String
+        - validUntil: LocalDate
+        - status: DelegationStatus
+        + isActive(onDate: LocalDate): boolean
+        + revoke(): void
+    }
+
+    class UserPreferences <<value object>> {
+        - language: String
+        - fontScale: double
+        - highContrast: boolean
+        - favoriteEntityIds: List<String>
+    }
+
+    ' Notifications & Rules
+    class Notification {
+        - notificationId: String
+        - recipientEmail: String
+        - scheduledDate: LocalDate
+        - sentAt: LocalDateTime
+        - status: String
+    }
+
+    class NotificationRule {
+        - ruleId: String
+        - triggerType: String
+        - delayDays: int
+        - overdueIntervalDays: int
+        - enabled: boolean
+    }
+
+    class BusinessRule {
+        - ruleId: String
+        - name: String
+        - value: String
+        - enabled: boolean
+    }
+
+    class ChangeHistoryRecord {
+        - recordId: String
+        - entityName: String
+        - entityId: String
+        - action: String
+        - timestamp: LocalDateTime
+    }
+
+    ' External domain references
+    class Customer {
+        - customerId: String
+        - legalName: String
+    }
+
+    class Invoice {
+        - invoiceNumber: String
+    }
+
+    ' Outbound port
+    interface NotificationGateway <<interface>> {
+        + sendNotification(email: String, subject: String, body: String): boolean
+    }
+}
+
+' ==========================================================
+' 4) INFRASTRUCTURE LAYER
+' ==========================================================
+package "com.invoicingsystem.infrastructure" {
+    class SmtpNotificationAdapter {
+        + sendNotification(email: String, subject: String, body: String): boolean
+    }
+}
+
+' ==========================================================
+' 5) RELATIONSHIPS
+' ==========================================================
+SystemAdministrationView ..> AccessAndSecurityController
+PortalDashboardView ..> AccessAndSecurityController
+
+AccessAndSecurityController ..> User
+AccessAndSecurityController ..> AccessRole
+AccessAndSecurityController ..> AccountDelegation
+AccessAndSecurityController ..> SubstituteApproverAssignment
+AccessAndSecurityController ..> NotificationRule
+AccessAndSecurityController ..> BusinessRule
+AccessAndSecurityController ..> AuditTrailService
+AccessAndSecurityController ..> NotificationGateway
+
+User "0..*" o-- "1..*" AccessRole : assignedRoles
+User "1" *-- "0..1" UserPreferences : preferences
+User "1" <-- "0..*" AccountDelegation : originalAssignee
+User "1" <-- "0..*" AccountDelegation : delegatedTo
+AccountDelegation "0..*" --> "1" Customer : customerScope
+
+User "1" <-- "0..*" SubstituteApproverAssignment : primaryApprover
+User "1" <-- "0..*" SubstituteApproverAssignment : substituteApprover
+
+Notification "0..*" --> "0..1" NotificationRule : appliedRule
+Notification "0..*" --> "0..1" Invoice : relatedInvoice
+Notification "0..*" --> "0..1" User : recipientUser
+
+ChangeHistoryRecord "0..*" --> "1" User : performedBy
+
+NotificationGateway <|.. SmtpNotificationAdapter
+
+@enduml
