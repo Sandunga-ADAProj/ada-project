@@ -1,6 +1,5 @@
 @startuml
 skinparam boxPadding 10
-skinparam participantPadding 10
 
 ' Component/Participant styling
 skinparam participant {

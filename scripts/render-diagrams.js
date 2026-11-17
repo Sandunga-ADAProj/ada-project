@@ -8,6 +8,7 @@
  * Uso:
  *   node scripts/render-diagrams.js          (renderizado incremental: solo procesa modificados)
  *   node scripts/render-diagrams.js --all    (fuerza la regeneración de todos los diagramas)
+ *   node scripts/render-diagrams.js --svg    (genera además archivos SVG vectoriales)
  */
 
 const fs = require('fs');
@@ -87,40 +88,42 @@ function isValidPng(buf) {
 }
 
 // Renderizado: prioriza PlantUML oficial si no supera el límite de URL, con fallback a Kroki
-async function renderDiagram(code) {
+async function renderDiagram(code, format = 'png') {
   let lastError = null;
 
-  // 1. Prioridad: Servidor oficial de PlantUML (para diagramas pequeños/medianos)
-  try {
-    const encoded = plantumlEncode(code);
-    if (encoded.length < 4000) {
-      const res = await fetch('https://www.plantuml.com/plantuml/png/' + encoded);
-      if (res.ok) {
-        const desc = res.headers.get('x-plantuml-diagram-description');
-        const err = res.headers.get('x-plantuml-diagram-error');
-        // Asegurar que no sea una imagen de error generada por PlantUML
-        if (!err && desc !== '(0 entities)' && desc !== '(Error)') {
-          const buf = Buffer.from(await res.arrayBuffer());
-          if (isValidPng(buf)) {
-            return buf;
+  // 1. Prioridad: Servidor oficial de PlantUML (para diagramas pequeños/medianos en PNG)
+  if (format === 'png') {
+    try {
+      const encoded = plantumlEncode(code);
+      if (encoded.length < 4000) {
+        const res = await fetch('https://www.plantuml.com/plantuml/png/' + encoded);
+        if (res.ok) {
+          const desc = res.headers.get('x-plantuml-diagram-description');
+          const err = res.headers.get('x-plantuml-diagram-error');
+          // Asegurar que no sea una imagen de error generada por PlantUML
+          if (!err && desc !== '(0 entities)' && desc !== '(Error)') {
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (isValidPng(buf)) {
+              return buf;
+            }
           }
         }
       }
+    } catch (err) {
+      lastError = err;
     }
-  } catch (err) {
-    lastError = err;
   }
 
-  // 2. Fallback: Kroki (soporta POST de diagramas gigantescos sin límite de URL)
+  // 2. Fallback: Kroki (soporta POST de diagramas gigantescos en PNG y SVG sin límite de URL)
   try {
-    const res = await fetch('https://kroki.io/plantuml/png', {
+    const res = await fetch(`https://kroki.io/plantuml/${format}`, {
       method: 'POST',
       body: code,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
     if (res.ok) {
       const buf = Buffer.from(await res.arrayBuffer());
-      if (isValidPng(buf)) {
+      if (format === 'svg' || isValidPng(buf)) {
         return buf;
       }
     } else {
@@ -136,6 +139,7 @@ async function renderDiagram(code) {
 
 async function main() {
   const forceAll = process.argv.includes('--all') || process.argv.includes('-f') || process.argv.includes('--force');
+  const generateSvg = process.argv.includes('--svg');
 
   const scriptDir = __dirname;
   const projectRoot = path.resolve(scriptDir, '..');
@@ -150,10 +154,14 @@ async function main() {
   const files = getAllFiles(srcRoot, ['.pu', '.puml', '.plantuml']);
   console.log(`Encontrados ${files.length} archivos PlantUML en '${path.relative(projectRoot, srcRoot)}'.`);
   if (forceAll) {
-    console.log('Modo forzado (--all): se regenerarán todos los diagramas.\n');
+    console.log('Modo forzado (--all): se regenerarán todos los diagramas.');
   } else {
-    console.log('Modo incremental: solo se procesarán diagramas nuevos o modificados (usa --all para forzar todos).\n');
+    console.log('Modo incremental: solo se procesarán diagramas nuevos o modificados (usa --all para forzar todos).');
   }
+  if (generateSvg) {
+    console.log('Modo SVG activado (--svg): se generarán también archivos .svg.');
+  }
+  console.log();
 
   let processedCount = 0;
   let skippedCount = 0;
@@ -172,7 +180,7 @@ async function main() {
 
     if (!forceAll && fs.existsSync(outFile)) {
       const outStat = fs.statSync(outFile);
-      if (outStat.mtimeMs >= srcStat.mtimeMs && outStat.size > 0) {
+      if (outStat.mtimeMs >= srcStat.mtimeMs && outStat.size > 0 && (!generateSvg || fs.existsSync(path.join(outDir, parsed.name + '.svg')))) {
         skippedCount++;
         continue;
       }
@@ -183,8 +191,14 @@ async function main() {
     try {
       fs.mkdirSync(outDir, { recursive: true });
       const code = fs.readFileSync(file, 'utf8');
-      const pngBuf = await renderDiagram(code);
+      const pngBuf = await renderDiagram(code, 'png');
       fs.writeFileSync(outFile, pngBuf);
+
+      if (generateSvg) {
+        const svgBuf = await renderDiagram(code, 'svg');
+        fs.writeFileSync(path.join(outDir, parsed.name + '.svg'), svgBuf);
+      }
+
       console.log(`OK (${(pngBuf.length / 1024).toFixed(1)} KB)`);
       processedCount++;
       await new Promise((r) => setTimeout(r, 200));

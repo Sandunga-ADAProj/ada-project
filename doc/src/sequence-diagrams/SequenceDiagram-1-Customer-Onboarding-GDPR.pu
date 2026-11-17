@@ -1,6 +1,5 @@
 @startuml
 skinparam boxPadding 10
-skinparam participantPadding 10
 skinparam participant {
     BackgroundColor #FFFFFF
     BorderColor #2B3E6A

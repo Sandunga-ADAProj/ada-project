@@ -1,4 +1,5 @@
 @startuml
+scale max 4096x4096
 hide circle
 hide empty fields
 hide <<enum>> empty members
