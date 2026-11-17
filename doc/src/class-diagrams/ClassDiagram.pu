@@ -57,7 +57,7 @@ package "com.invoicingsystem.presentation" {
 ' 2) APPLICATION LOGIC LAYER (CONTROLLERS / USE CASES)
 ' ==========================================================
 package "com.invoicingsystem.application" {
-    class CustomerSubscriptionController <<control>> {
+    class CustomerAndSubscriptionController <<control>> {
         - customerRepo: CustomerRepository
         - notificationGateway: NotificationGateway
         - auditService: AuditTrailService
@@ -69,6 +69,7 @@ package "com.invoicingsystem.application" {
         + approveCommercialException(exceptionId: String, approved: boolean): boolean
         + requestCancellation(customerId: String, reason: String): CancellationRequest
         + processCancellation(requestId: String, approved: boolean): boolean
+        + getCustomerTimeline(customerId: String): List<CustomerTimelineEntry>
     }
 
     class InvoicingAndBillingController <<control>> {
@@ -79,6 +80,7 @@ package "com.invoicingsystem.application" {
         + executeRecurringBillingBatch(executionDate: LocalDate): void
         + issueAndSendInvoice(invoiceNumber: String): Invoice
         + createAdHocInvoice(customerId: String, lines: List<InvoiceLine>): Invoice
+        + deleteTestInvoice(invoiceNumber: String): boolean
         + processScheduledReminders(date: LocalDate): void
         + postComment(invoiceNumber: String, author: User, text: String): Comment
         + lockFinancialPeriod(periodId: String, lock: boolean): boolean
@@ -95,14 +97,16 @@ package "com.invoicingsystem.application" {
         + allocatePayment(tx: BankTransaction, invoice: Invoice, amount: BigDecimal): PaymentAllocation
     }
 
-    class AccessAndSecurityController <<control>> {
+    class AccessAndConfigController <<control>> {
         - auditService: AuditTrailService
         + authenticate(email: String, password: String): boolean
         + delegateAccountAccess(granter: User, grantee: User, customer: Customer, validUntil: LocalDate): AccountDelegation
+        + revokeDelegation(delegationId: String): boolean
         + assignSubstituteApprover(primary: User, substitute: User, scope: String, validUntil: LocalDate): SubstituteApproverAssignment
         + configureRole(roleName: String, permissions: Set<String>): AccessRole
         + assignRoleToUser(user: User, role: AccessRole): void
-        + revokeDelegations(): void
+        + updateSystemRules(rule: BusinessRule): void
+        + updateNotificationRules(rule: NotificationRule): void
     }
 
     class AuditTrailService <<service>> {
@@ -238,10 +242,13 @@ package "com.invoicingsystem.domain" {
         - subscriptionId: String
         - startDate: LocalDate
         - billingAnchorDay: int
+        - paymentTermsDays: int
         - price: BigDecimal
         - active: boolean
         + getPriceOn(date: LocalDate): BigDecimal
         + applyPriceReview(review: PriceReview): void
+        + activate(): boolean
+        + cancel(): void
     }
 
     class CommercialException {
@@ -278,6 +285,9 @@ package "com.invoicingsystem.domain" {
         + changeStatus(newStatus: InvoiceStatus): boolean
         + getOutstandingBalance(): BigDecimal
         + isEditable(): boolean
+        + isReminderEligible(): boolean
+        + addLine(line: InvoiceLine): void
+        + addComment(comment: Comment): void
     }
 
     class InvoiceLine {
@@ -302,6 +312,7 @@ package "com.invoicingsystem.domain" {
         + lock(): void
         + unlock(): void
         + isLocked(): boolean
+        + grantException(invoiceNumber: String): void
     }
 
     class AccountingExportPackage {
@@ -328,6 +339,7 @@ package "com.invoicingsystem.domain" {
         - amount: BigDecimal
         - valueDate: LocalDate
         - reconciled: boolean
+        + markReconciled(): void
     }
 
     class PaymentAllocation {
@@ -336,13 +348,28 @@ package "com.invoicingsystem.domain" {
         - allocationDate: LocalDate
     }
 
-    ' --- Notifications & Auditing ---
+    ' --- Notifications, Rules & Auditing ---
     class Notification {
         - notificationId: String
         - recipientEmail: String
         - scheduledDate: LocalDate
         - sentAt: LocalDateTime
         - status: String
+    }
+
+    class NotificationRule {
+        - ruleId: String
+        - triggerType: String
+        - delayDays: int
+        - overdueIntervalDays: int
+        - enabled: boolean
+    }
+
+    class BusinessRule {
+        - ruleId: String
+        - name: String
+        - value: String
+        - enabled: boolean
     }
 
     class ChangeHistoryRecord {
@@ -401,18 +428,18 @@ package "com.invoicingsystem.infrastructure" {
 ' ==========================================================
 
 ' Boundaries -> Controls
-PortalDashboardView ..> AccessAndSecurityController
-CustomerManagementView ..> CustomerSubscriptionController
+PortalDashboardView ..> AccessAndConfigController
+CustomerManagementView ..> CustomerAndSubscriptionController
 InvoicingAndReconciliationView ..> InvoicingAndBillingController
 InvoicingAndReconciliationView ..> ReconciliationController
-SystemAdministrationView ..> AccessAndSecurityController
+SystemAdministrationView ..> AccessAndConfigController
 SystemAdministrationView ..> InvoicingAndBillingController
 
 ' Controls -> Domain Entities & Services
-CustomerSubscriptionController ..> Customer
-CustomerSubscriptionController ..> Subscription
-CustomerSubscriptionController ..> NotificationGateway
-CustomerSubscriptionController ..> AuditTrailService
+CustomerAndSubscriptionController ..> Customer
+CustomerAndSubscriptionController ..> Subscription
+CustomerAndSubscriptionController ..> NotificationGateway
+CustomerAndSubscriptionController ..> AuditTrailService
 
 InvoicingAndBillingController ..> Invoice
 InvoicingAndBillingController ..> FinancialPeriod
@@ -424,16 +451,19 @@ ReconciliationController ..> BankTransaction
 ReconciliationController ..> Invoice
 ReconciliationController ..> BankingPaymentGateway
 
-AccessAndSecurityController ..> User
-AccessAndSecurityController ..> AccessRole
-AccessAndSecurityController ..> AccountDelegation
-AccessAndSecurityController ..> SubstituteApproverAssignment
+AccessAndConfigController ..> User
+AccessAndConfigController ..> AccessRole
+AccessAndConfigController ..> AccountDelegation
+AccessAndConfigController ..> SubstituteApproverAssignment
+AccessAndConfigController ..> NotificationRule
+AccessAndConfigController ..> BusinessRule
 
 ' Domain Relationships: Identity & Access (RBAC)
 User "0..*" o-- "1..*" AccessRole : hasRoles
 User "1" *-- "0..1" UserPreferences : preferences
 User "1" <-- "0..*" AccountDelegation : originalAssignee
 User "1" <-- "0..*" AccountDelegation : delegatedTo
+AccountDelegation "0..*" --> "1" Customer : customerScope
 User "1" <-- "0..*" SubstituteApproverAssignment : primaryApprover
 User "1" <-- "0..*" SubstituteApproverAssignment : substituteApprover
 
@@ -459,6 +489,7 @@ Invoice "1" -- "0..*" PaymentAllocation : payments
 
 ' Domain Relationships: Notifications & Exports
 Invoice "0..1" <-- "0..*" Notification : relatedInvoice
+Notification "0..*" --> "0..1" NotificationRule : appliedRule
 AccountingExportPackage "0..*" --> "1" FinancialPeriod : period
 AccountingExportPackage "0..*" --> "1" User : requestedBy
 ChangeHistoryRecord "0..*" --> "1" User : performedBy

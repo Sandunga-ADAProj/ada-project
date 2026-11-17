@@ -41,7 +41,7 @@ package "com.invoicingsystem.presentation" {
 ' 2) APPLICATION LOGIC LAYER (CONTROLS & SERVICES)
 ' ==========================================================
 package "com.invoicingsystem.application" {
-    class AccessAndSecurityController <<control>> {
+    class AccessAndConfigController <<control>> {
         - auditService: AuditTrailService
         - notificationGateway: NotificationGateway
         + authenticate(email: String, password: String): boolean
@@ -179,17 +179,17 @@ package "com.invoicingsystem.infrastructure" {
 ' ==========================================================
 ' 5) RELATIONSHIPS
 ' ==========================================================
-SystemAdministrationView ..> AccessAndSecurityController
-PortalDashboardView ..> AccessAndSecurityController
+SystemAdministrationView ..> AccessAndConfigController
+PortalDashboardView ..> AccessAndConfigController
 
-AccessAndSecurityController ..> User
-AccessAndSecurityController ..> AccessRole
-AccessAndSecurityController ..> AccountDelegation
-AccessAndSecurityController ..> SubstituteApproverAssignment
-AccessAndSecurityController ..> NotificationRule
-AccessAndSecurityController ..> BusinessRule
-AccessAndSecurityController ..> AuditTrailService
-AccessAndSecurityController ..> NotificationGateway
+AccessAndConfigController ..> User
+AccessAndConfigController ..> AccessRole
+AccessAndConfigController ..> AccountDelegation
+AccessAndConfigController ..> SubstituteApproverAssignment
+AccessAndConfigController ..> NotificationRule
+AccessAndConfigController ..> BusinessRule
+AccessAndConfigController ..> AuditTrailService
+AccessAndConfigController ..> NotificationGateway
 
 User "0..*" o-- "1..*" AccessRole : assignedRoles
 User "1" *-- "0..1" UserPreferences : preferences

@@ -40,7 +40,7 @@ package "com.invoicingsystem.presentation" {
 ' 2) APPLICATION LOGIC LAYER (CONTROLS & SERVICES)
 ' ==========================================================
 package "com.invoicingsystem.application" {
-    class CustomerSubscriptionController <<control>> {
+    class CustomerAndSubscriptionController <<control>> {
         - notificationGateway: NotificationGateway
         - fileStorage: FileStorageGateway
         - auditService: AuditTrailService
@@ -205,14 +205,14 @@ package "com.invoicingsystem.infrastructure" {
 ' ==========================================================
 ' 5) RELATIONSHIPS
 ' ==========================================================
-CustomerManagementView ..> CustomerSubscriptionController
-PortalDashboardView ..> CustomerSubscriptionController
+CustomerManagementView ..> CustomerAndSubscriptionController
+PortalDashboardView ..> CustomerAndSubscriptionController
 
-CustomerSubscriptionController ..> Customer
-CustomerSubscriptionController ..> Subscription
-CustomerSubscriptionController ..> NotificationGateway
-CustomerSubscriptionController ..> FileStorageGateway
-CustomerSubscriptionController ..> AuditTrailService
+CustomerAndSubscriptionController ..> Customer
+CustomerAndSubscriptionController ..> Subscription
+CustomerAndSubscriptionController ..> NotificationGateway
+CustomerAndSubscriptionController ..> FileStorageGateway
+CustomerAndSubscriptionController ..> AuditTrailService
 
 Customer "1" *-- "1..*" Contact : contacts
 Customer "1" *-- "0..*" Subscription : subscriptions

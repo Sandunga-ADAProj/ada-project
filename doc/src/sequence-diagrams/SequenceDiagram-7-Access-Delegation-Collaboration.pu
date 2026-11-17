@@ -46,7 +46,7 @@ actor Scheduler as "delegationScheduler : SystemDaemon"
 ' ─────────────────────────────────────────────────────────────────────────────
 
 box "Presentation Layer" #F5F7FA
-    participant PView as "portalView : PortalDashboardSummaryView" <<boundary>>
+    participant PView as "portalView : PortalDashboardView" <<boundary>>
     participant IView as "invoicingView : InvoicingAndReconciliationView" <<boundary>>
 end box
 
