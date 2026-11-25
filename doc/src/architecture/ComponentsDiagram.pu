@@ -39,10 +39,11 @@ skinparam ArrowColor #2B3E6A
 ' 1) PRESENTATION LAYER
 ' -----------------------------------------
 rectangle "Presentation Layer" as PRES {
-    component "PortalDashboardView" as PortalView <<boundary>>
-    component "CustomerManagementView" as CustomerView <<boundary>>
-    component "InvoicingAndReconciliationView" as InvoicingView <<boundary>>
-    component "SystemAdministrationView" as AdminView <<boundary>>
+    component "PortalDashboardView" as PortalView
+    component "CustomerManagementView" as CustomerView
+    component "InvoicingView" as InvoicingView
+    component "ReconciliationView" as ReconciliationView
+    component "SystemAdministrationView" as AdminView
 }
 
 ' Interfaces between Presentation and Application
@@ -55,10 +56,12 @@ rectangle "Presentation Layer" as PRES {
 ' 2) APPLICATION LAYER
 ' -----------------------------------------
 rectangle "Application Layer" as APP {
-    component "AccessAndConfigController" as AccessCtrl <<control>>
-    component "CustomerAndSubscriptionController" as CustomerCtrl <<control>>
-    component "InvoicingAndBillingController" as BillingCtrl <<control>>
-    component "ReconciliationController" as ReconCtrl <<control>>
+    component "AccessController" as AccessCtrl
+    component "ConfigurationController" as ConfigCtrl
+    component "CustomerController" as CustomerCtrl
+    component "SubscriptionController" as SubscriptionCtrl
+    component "BillingController" as BillingCtrl
+    component "ReconciliationController" as ReconCtrl
 }
 
 ' Interfaces between Application and Domain
@@ -72,22 +75,25 @@ rectangle "Application Layer" as APP {
 ' 3) DOMAIN LAYER
 ' -----------------------------------------
 rectangle "Domain Layer" as DOM {
-    ' User & Access subdomain
-    component "User & Access\n(User, Admin, SuperAdmin,\nAccountDelegation)" as UserAccess
+    ' Access management capability
+    component "Access Management" as AccessMgmt
 
-    ' Customer & Subscription subdomain
+    ' Customer management capability
+    component "Customer Management" as CustomerMgmt
+
+    ' Subscription and pricing capability
     ' PriceReview: approval-pending value object proposed alongside CommercialException (SD-2)
-    component "Customer & Subscription\n(Customer, Contact, Subscription,\nBillingPlan, CommercialException,\nCancellationRequest, PriceReview)" as CustomerSub
+    component "Subscription Management" as SubscriptionMgmt
 
-    ' Invoice Management subdomain
+    ' Invoice management capability
     ' AccountingExportPackage: download payload generated per fiscal period export (UC-18, SD-4)
     ' ChangeHistoryRecord: cross-cutting audit value object; every entity creates one on mutation
     ' Notification: dispatch DTO created by NotificationGateway before async send (DS-BASE)
-    component "Invoice Management\n(Invoice, InvoiceLine, Comment,\nFinancialPeriod, AccountingExportPackage,\nChangeHistoryRecord, Notification)" as InvoiceMgmt
+    component "Invoice Management" as InvoiceMgmt
 
-    ' Bank Transactions subdomain
+    ' Payment reconciliation capability
     ' PaymentAllocation: links a BankTransaction to its matched Invoice (UC-20, UC-22, SD-5)
-    component "Bank Transactions\n(BankTransaction, PaymentAllocation)" as BankTx
+    component "Payment Reconciliation" as PaymentRecon
 
     ' Ports defined by the domain (implemented by infrastructure)
     () "BankingPaymentGateway" as BankingPaymentGateway
@@ -112,22 +118,24 @@ rectangle "Infrastructure Layer" as INFRA {
 ' -----------------------------------------
 () "BankingAPI" as BankingAPI
 () "SendEmail" as SendEmail
-component "Banking API\n(or simulated Stripe)" as BankingExt <<external>>
-component "Notification Gateway\n(SMTP)" as NotifExt <<external>>
+component "Banking API\n(or simulated Stripe)" as BankingExt
+component "Notification Gateway\n(SMTP)" as NotifExt
 
 
 ' PROVIDED INTERFACES (plain lines)
 ' -----------------------------------------
 AccessCtrl -up- AccessConfigAPI
+ConfigCtrl -up- AccessConfigAPI
 CustomerCtrl -up- CustomerSubscriptionAPI
+SubscriptionCtrl -up- CustomerSubscriptionAPI
 BillingCtrl -up- InvoicingBillingAPI
 ReconCtrl -up- ReconciliationAPI
 
-UserAccess -up- UserAPI
-CustomerSub -up- CustomerAPI
-CustomerSub -up- BillingPlanAPI
+AccessMgmt -up- UserAPI
+CustomerMgmt -up- CustomerAPI
+SubscriptionMgmt -up- BillingPlanAPI
 InvoiceMgmt -up- InvoiceAPI
-BankTx -up- TransactionAPI
+PaymentRecon -up- TransactionAPI
 
 BankingAdapter -up- BankingPaymentGateway
 NotifAdapter -up- NotificationGateway
@@ -146,14 +154,13 @@ PortalView -down-( AccessConfigAPI
 AdminView -down-( AccessConfigAPI
 CustomerView -down-( CustomerSubscriptionAPI
 InvoicingView -down-( InvoicingBillingAPI
-InvoicingView -down-( ReconciliationAPI
+ReconciliationView -down-( ReconciliationAPI
 
 ' Application -> Domain
 AccessCtrl -down-( UserAPI
-AccessCtrl -down-( BillingPlanAPI
+ConfigCtrl -down-( UserAPI
+SubscriptionCtrl -down-( BillingPlanAPI
 CustomerCtrl -down-( CustomerAPI
-' BillingPlanAPI: CustomerCtrl resolves the plan during subscription setup (SD-2, LV-4)
-CustomerCtrl -down-( BillingPlanAPI
 BillingCtrl -down-( InvoiceAPI
 ' CustomerAPI: BillingCtrl reads Customer/Subscription data during batch billing (SD-3)
 BillingCtrl -down-( CustomerAPI
@@ -164,27 +171,30 @@ ReconCtrl -down-( CustomerAPI
 
 ' Application -> Domain ports
 CustomerCtrl -down-( NotificationGateway
+SubscriptionCtrl -down-( NotificationGateway
 BillingCtrl -down-( NotificationGateway
 BillingCtrl -down-( BusinessCalendarService
 ReconCtrl -down-( NotificationGateway
 ReconCtrl -down-( BankingPaymentGateway
 
 ' Domain <-> Domain
-UserAccess -right-( CustomerAPI
-CustomerSub -right-( InvoiceAPI
+AccessMgmt -right-( CustomerAPI
+CustomerMgmt -right-( InvoiceAPI
 InvoiceMgmt -left-( UserAPI
-BankTx -left-( InvoiceAPI
+PaymentRecon -left-( InvoiceAPI
 
 ' Layout hints (invisible): fix the left-to-right order of the domain components
-UserAccess -[hidden]right- CustomerSub
-CustomerSub -[hidden]right- InvoiceMgmt
-InvoiceMgmt -[hidden]right- BankTx
+AccessMgmt -[hidden]right- CustomerMgmt
+CustomerMgmt -[hidden]right- SubscriptionMgmt
+SubscriptionMgmt -[hidden]right- InvoiceMgmt
+InvoiceMgmt -[hidden]right- PaymentRecon
 
 ' Domain -> persistence port
-UserAccess -down-( DataRepository
-CustomerSub -down-( DataRepository
+AccessMgmt -down-( DataRepository
+CustomerMgmt -down-( DataRepository
+SubscriptionMgmt -down-( DataRepository
 InvoiceMgmt -down-( DataRepository
-BankTx -down-( DataRepository
+PaymentRecon -down-( DataRepository
 
 ' Infrastructure -> external systems
 BankingAdapter -down-( BankingAPI
@@ -202,7 +212,11 @@ note right of CalendarAdapter
 end note
 
 note right of DB
-  Basic persistence NEEDS REVISION(?)
+  Relational persistence is represented at this level
+  without committing to a vendor or schema. The
+  PersistenceAdapter owns transactions and maps the
+  domain model to storage. Detailed schema and
+  technology choices belong in the data design.
 end note
 
 note as Constraints
