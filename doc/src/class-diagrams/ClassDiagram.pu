@@ -1,9 +1,10 @@
 @startuml
 scale max 4096x4096
 hide circle
-hide empty fields
-hide <<enum>> empty members
 skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 38
+skinparam ranksep 40
 
 ' --- Styling ---
 skinparam class {
@@ -26,199 +27,131 @@ skinparam package {
 }
 
 ' ==========================================================
-' 1) PRESENTATION LAYER (BOUNDARIES - LIMPIAS, SIN BOTONES)
+' 1) PRESENTATION LAYER
 ' ==========================================================
 package "com.invoicingsystem.presentation" {
-    class PortalDashboardView <<boundary>> {
-        + displayDashboard(summary: DashboardSummary): void
-        + handleUserPreferences(prefs: UserPreferences): void
+    class CustomerManagementView {
+        + handleCustomerRegistration(name: String, taxId: String, email: String): void
+        + handleSubscriptionSetup(customerId: String, planId: String): void
     }
 
-    class CustomerManagementView <<boundary>> {
-        + handleCustomerRegistration(data: CustomerRegistrationData): void
-        + handleSubscriptionChange(subId: String, planId: String): void
-        + handleCancellationRequest(customerId: String, reason: String): void
-    }
-
-    class InvoicingAndReconciliationView <<boundary>> {
+    class InvoicingView {
         + handleInvoiceIssuance(invoiceNumber: String): void
-        + handlePaymentReconciliation(txId: String, invoiceId: String): void
-        + handleAccountingExport(periodId: String): void
+        + handlePeriodLock(periodId: String): void
     }
 
-    class SystemAdministrationView <<boundary>> {
-        + handleRoleManagement(userId: String, roleId: String): void
-        + handlePricingReview(reviewId: String, approved: boolean): void
-        + handlePeriodLock(periodId: String, locked: boolean): void
+    class ReconciliationView {
+        + handleManualReconciliation(txId: String, invoiceNumber: String): void
+    }
+
+    class PortalDashboardView {
+        + handleLogin(email: String): void
+        + displayDashboard(): void
     }
 }
 
 ' ==========================================================
-' 2) APPLICATION LOGIC LAYER (CONTROLLERS / USE CASES)
+' 2) APPLICATION LAYER (SINGLE-RESPONSIBILITY CONTROLLERS)
 ' ==========================================================
 package "com.invoicingsystem.application" {
-    class CustomerAndSubscriptionController <<control>> {
-        - customerRepo: CustomerRepository
+    class CustomerController {
         - notificationGateway: NotificationGateway
-        - auditService: AuditTrailService
-        + registerCustomer(data: CustomerRegistrationData): Customer
-        + manageContacts(customerId: String, contact: Contact): boolean
-        + anonymizeContact(contactId: String): boolean
-        + createSubscription(customerId: String, plan: BillingPlan, start: LocalDate): Subscription
-        + proposeCommercialException(subId: String, type: String, val: BigDecimal): CommercialException
-        + approveCommercialException(exceptionId: String, approved: boolean): boolean
-        + requestCancellation(customerId: String, reason: String): CancellationRequest
-        + processCancellation(requestId: String, approved: boolean): boolean
-        + getCustomerTimeline(customerId: String): List<CustomerTimelineEntry>
+        + registerCustomer(legalName: String, taxId: String, email: String): Customer
+        + manageContact(customerId: String, contact: Contact): boolean
+        + cancelCustomerAccount(customerId: String, reason: String): boolean
     }
 
-    class InvoicingAndBillingController <<control>> {
-        - invoiceRepo: InvoiceRepository
+    class SubscriptionController {
+        + createSubscription(customerId: String, plan: BillingPlan, startDate: LocalDate): Subscription
+        + cancelSubscription(subscriptionId: String): void
+    }
+
+    class InvoicingController {
         - calendarService: BusinessCalendarService
         - notificationGateway: NotificationGateway
-        - auditService: AuditTrailService
         + executeRecurringBillingBatch(executionDate: LocalDate): void
-        + issueAndSendInvoice(invoiceNumber: String): Invoice
         + createAdHocInvoice(customerId: String, lines: List<InvoiceLine>): Invoice
-        + deleteTestInvoice(invoiceNumber: String): boolean
+        + issueAndSendInvoice(invoiceNumber: String): Invoice
         + processScheduledReminders(date: LocalDate): void
-        + postComment(invoiceNumber: String, author: User, text: String): Comment
-        + lockFinancialPeriod(periodId: String, lock: boolean): boolean
-        + overridePeriodForInvoice(invoiceNumber: String, reason: String): boolean
-        + generateAccountingExport(period: FinancialPeriod): AccountingExportPackage
-        + reviewAnnualPricing(period: Year): List<PriceReview>
     }
 
-    class ReconciliationController <<control>> {
+    class FinancialPeriodController {
+        + lockPeriod(periodId: String): boolean
+        + overridePeriodLock(periodId: String, invoiceNumber: String, actor: User): boolean
+    }
+
+    class ReconciliationController {
         - bankingGateway: BankingPaymentGateway
-        - auditService: AuditTrailService
         + runAutomatedReconciliation(): void
-        + resolveUnmatchedTransaction(txId: String, invoiceNumber: String): boolean
-        + allocatePayment(tx: BankTransaction, invoice: Invoice, amount: BigDecimal): PaymentAllocation
+        + resolveUnmatchedTransaction(txId: String, invoiceNumber: String): PaymentAllocation
     }
 
-    class AccessAndConfigController <<control>> {
-        - auditService: AuditTrailService
+    class AccessController {
         + authenticate(email: String, password: String): boolean
-        + delegateAccountAccess(granter: User, grantee: User, customer: Customer, validUntil: LocalDate): AccountDelegation
-        + revokeDelegation(delegationId: String): boolean
-        + assignSubstituteApprover(primary: User, substitute: User, scope: String, validUntil: LocalDate): SubstituteApproverAssignment
-        + configureRole(roleName: String, permissions: Set<String>): AccessRole
-        + assignRoleToUser(user: User, role: AccessRole): void
-        + updateSystemRules(rule: BusinessRule): void
-        + updateNotificationRules(rule: NotificationRule): void
-    }
-
-    class AuditTrailService <<service>> {
-        + logOperation(actor: User, action: String, targetEntity: String, details: String): void
+        + assignRole(user: User, role: AccessRole): void
     }
 }
 
 ' ==========================================================
-' 3) DOMAIN LAYER (ENTITIES, VALUE OBJECTS & PORTS)
+' 3) DOMAIN LAYER (CORE ENTITIES, ENUMS & PORTS)
 ' ==========================================================
 package "com.invoicingsystem.domain" {
 
     ' --- Enums ---
-    enum CustomerStatus {
+    enum CustomerStatus <<enum>> {
         PENDING_VERIFICATION
         ACTIVE
         SUSPENDED
         CANCELLED
     }
-    enum AccountStanding {
+
+    enum AccountStanding <<enum>> {
         UP_TO_DATE
         OVERDUE
         SUSPENDED
         IN_DISPUTE
     }
-    enum InvoiceStatus {
+
+    enum InvoiceStatus <<enum>> {
         DRAFT
         READY
         ISSUED
         SENT
         OVERDUE
-        PAID
         PARTIALLY_RECONCILED
+        PAID
     }
-    enum InvoiceType {
+
+    enum InvoiceType <<enum>> {
         RECURRING
         ONE_OFF
         TEST
     }
-    enum ApprovalStatus {
-        PENDING
-        APPROVED
-        REJECTED
-    }
-    enum DelegationStatus {
-        ACTIVE
-        EXPIRED
-        REVOKED
-    }
-    enum ContactState {
-        ACTIVE
-        INACTIVE
-        ANONYMIZED
-    }
 
-    ' --- Identity & Access Control (RBAC sin jerarquía espuria) ---
+    ' --- Access Control ---
     class User {
         - userId: String
         - email: String
         - active: boolean
-        - preferences: UserPreferences
         + hasPermission(permission: String): boolean
-        + hasRole(roleName: String): boolean
-        + isAccountNonLocked(): boolean
     }
 
     class AccessRole {
         - roleId: String
         - name: String
         - permissions: Set<String>
-        + grantPermission(permission: String): void
-        + revokePermission(permission: String): void
-    }
-
-    class AccountDelegation {
-        - delegationId: String
-        - startDate: LocalDate
-        - validUntil: LocalDate
-        - status: DelegationStatus
-        + isActive(onDate: LocalDate): boolean
-        + revoke(): void
-    }
-
-    class SubstituteApproverAssignment {
-        - assignmentId: String
-        - approvalScope: String
-        - validUntil: LocalDate
-        - status: DelegationStatus
-        + isActive(onDate: LocalDate): boolean
-        + revoke(): void
-    }
-
-    class UserPreferences <<value object>> {
-        - language: String
-        - fontScale: double
-        - highContrast: boolean
-        - favoriteEntityIds: List<String>
     }
 
     ' --- CRM & Subscriptions ---
     class Customer {
         - customerId: String
         - legalName: String
-        - commercialName: String
         - taxId: String
         - companyEmail: String
         - status: CustomerStatus
         - standing: AccountStanding
-        - tags: List<String>
         + hasCompleteTaxInfo(): boolean
-        + getOutstandingBalance(): BigDecimal
-        + updateStanding(standing: AccountStanding): void
+        + getOutstandingBalance(): float
     }
 
     class Contact {
@@ -226,16 +159,14 @@ package "com.invoicingsystem.domain" {
         - name: String
         - email: String
         - isBillingContact: boolean
-        - state: ContactState
+        - active: boolean
         + anonymize(): void
     }
 
     class BillingPlan {
         - planId: String
         - name: String
-        - basePrice: BigDecimal
-        - minPrice: BigDecimal
-        - maxPrice: BigDecimal
+        - basePrice: float
     }
 
     class Subscription {
@@ -243,32 +174,10 @@ package "com.invoicingsystem.domain" {
         - startDate: LocalDate
         - billingAnchorDay: int
         - paymentTermsDays: int
-        - price: BigDecimal
+        - price: float
         - active: boolean
-        + getPriceOn(date: LocalDate): BigDecimal
-        + applyPriceReview(review: PriceReview): void
         + activate(): boolean
         + cancel(): void
-    }
-
-    class CommercialException {
-        - exceptionId: String
-        - type: String
-        - discountValue: BigDecimal
-        - startDate: LocalDate
-        - endDate: LocalDate
-        - status: ApprovalStatus
-        + approve(reviewer: User): void
-        + reject(reviewer: User): void
-    }
-
-    class CancellationRequest {
-        - requestId: String
-        - requestDate: LocalDate
-        - reason: String
-        - status: ApprovalStatus
-        + approve(reviewer: User): void
-        + reject(reviewer: User): void
     }
 
     ' --- Invoicing & Finance ---
@@ -278,30 +187,20 @@ package "com.invoicingsystem.domain" {
         - status: InvoiceStatus
         - issueDate: LocalDate
         - dueDate: LocalDate
-        - subtotal: BigDecimal
-        - vatAmount: BigDecimal
-        - total: BigDecimal
+        - subtotal: float
+        - vatAmount: float
+        - total: float
         + calculateTotals(): void
         + changeStatus(newStatus: InvoiceStatus): boolean
-        + getOutstandingBalance(): BigDecimal
-        + isEditable(): boolean
-        + isReminderEligible(): boolean
-        + addLine(line: InvoiceLine): void
-        + addComment(comment: Comment): void
+        + getOutstandingBalance(): float
     }
 
     class InvoiceLine {
         - description: String
         - quantity: int
-        - unitPrice: BigDecimal
-        - taxRate: BigDecimal
-        + getLineTotal(): BigDecimal
-    }
-
-    class Comment {
-        - commentId: String
-        - text: String
-        - createdAt: LocalDateTime
+        - unitPrice: float
+        - taxRate: float
+        + getLineTotal(): float
     }
 
     class FinancialPeriod {
@@ -310,33 +209,14 @@ package "com.invoicingsystem.domain" {
         - endDate: LocalDate
         - locked: boolean
         + lock(): void
-        + unlock(): void
         + isLocked(): boolean
-        + grantException(invoiceNumber: String): void
-    }
-
-    class AccountingExportPackage {
-        - exportId: String
-        - version: int
-        - generatedAt: LocalDateTime
-        - filePath: String
-        + isRegenerated(): boolean
-    }
-
-    class PriceReview {
-        - reviewId: String
-        - proposedPrice: BigDecimal
-        - approvedPrice: BigDecimal
-        - effectiveFrom: LocalDate
-        - status: ApprovalStatus
-        + approve(reviewer: User, finalPrice: BigDecimal): void
     }
 
     ' --- Banking & Reconciliation ---
     class BankTransaction {
         - txId: String
         - reference: String
-        - amount: BigDecimal
+        - amount: float
         - valueDate: LocalDate
         - reconciled: boolean
         + markReconciled(): void
@@ -344,11 +224,11 @@ package "com.invoicingsystem.domain" {
 
     class PaymentAllocation {
         - allocationId: String
-        - amount: BigDecimal
+        - amount: float
         - allocationDate: LocalDate
     }
 
-    ' --- Notifications, Rules & Auditing ---
+    ' --- Notifications ---
     class Notification {
         - notificationId: String
         - recipientEmail: String
@@ -357,30 +237,7 @@ package "com.invoicingsystem.domain" {
         - status: String
     }
 
-    class NotificationRule {
-        - ruleId: String
-        - triggerType: String
-        - delayDays: int
-        - overdueIntervalDays: int
-        - enabled: boolean
-    }
-
-    class BusinessRule {
-        - ruleId: String
-        - name: String
-        - value: String
-        - enabled: boolean
-    }
-
-    class ChangeHistoryRecord {
-        - recordId: String
-        - entityName: String
-        - entityId: String
-        - action: String
-        - timestamp: LocalDateTime
-    }
-
-    ' --- Domain Interfaces (Outbound Ports) ---
+    ' --- Outbound Ports (Interfaces) ---
     interface BankingPaymentGateway <<interface>> {
         + fetchTransactionsSince(checkpoint: LocalDateTime): List<BankTransaction>
     }
@@ -392,11 +249,6 @@ package "com.invoicingsystem.domain" {
     interface BusinessCalendarService <<interface>> {
         + isWorkingDay(date: LocalDate, country: String): boolean
         + getNextWorkingDay(date: LocalDate, country: String): LocalDate
-    }
-
-    interface FileStorageGateway <<interface>> {
-        + storeFile(name: String, content: byte[]): String
-        + getFile(storageKey: String): byte[]
     }
 }
 
@@ -416,88 +268,72 @@ package "com.invoicingsystem.infrastructure" {
         + isWorkingDay(date: LocalDate, country: String): boolean
         + getNextWorkingDay(date: LocalDate, country: String): LocalDate
     }
-
-    class SecureCloudFileStorageAdapter {
-        + storeFile(name: String, content: byte[]): String
-        + getFile(storageKey: String): byte[]
-    }
 }
 
 ' ==========================================================
 ' 5) RELATIONSHIPS
 ' ==========================================================
 
-' Boundaries -> Controls
-PortalDashboardView ..> AccessAndConfigController
-CustomerManagementView ..> CustomerAndSubscriptionController
-InvoicingAndReconciliationView ..> InvoicingAndBillingController
-InvoicingAndReconciliationView ..> ReconciliationController
-SystemAdministrationView ..> AccessAndConfigController
-SystemAdministrationView ..> InvoicingAndBillingController
+' Presentation -> Application
+PortalDashboardView ..> AccessController
+CustomerManagementView ..> CustomerController
+CustomerManagementView ..> SubscriptionController
+InvoicingView ..> InvoicingController
+InvoicingView ..> FinancialPeriodController
+ReconciliationView ..> ReconciliationController
 
-' Controls -> Domain Entities & Services
-CustomerAndSubscriptionController ..> Customer
-CustomerAndSubscriptionController ..> Subscription
-CustomerAndSubscriptionController ..> NotificationGateway
-CustomerAndSubscriptionController ..> AuditTrailService
+' Application -> Domain
+AccessController ..> User
+AccessController ..> AccessRole
 
-InvoicingAndBillingController ..> Invoice
-InvoicingAndBillingController ..> FinancialPeriod
-InvoicingAndBillingController ..> NotificationGateway
-InvoicingAndBillingController ..> BusinessCalendarService
-InvoicingAndBillingController ..> AuditTrailService
+CustomerController ..> Customer
+CustomerController ..> NotificationGateway
+
+SubscriptionController ..> Subscription
+SubscriptionController ..> BillingPlan
+
+InvoicingController ..> Invoice
+InvoicingController ..> BusinessCalendarService
+InvoicingController ..> NotificationGateway
+
+FinancialPeriodController ..> FinancialPeriod
+FinancialPeriodController ..> User
 
 ReconciliationController ..> BankTransaction
 ReconciliationController ..> Invoice
 ReconciliationController ..> BankingPaymentGateway
 
-AccessAndConfigController ..> User
-AccessAndConfigController ..> AccessRole
-AccessAndConfigController ..> AccountDelegation
-AccessAndConfigController ..> SubstituteApproverAssignment
-AccessAndConfigController ..> NotificationRule
-AccessAndConfigController ..> BusinessRule
+' Domain: Access Control
+User "0..*" o-- "1..*" AccessRole : assignedRoles
 
-' Domain Relationships: Identity & Access (RBAC)
-User "0..*" o-- "1..*" AccessRole : hasRoles
-User "1" *-- "0..1" UserPreferences : preferences
-User "1" <-- "0..*" AccountDelegation : originalAssignee
-User "1" <-- "0..*" AccountDelegation : delegatedTo
-AccountDelegation "0..*" --> "1" Customer : customerScope
-User "1" <-- "0..*" SubstituteApproverAssignment : primaryApprover
-User "1" <-- "0..*" SubstituteApproverAssignment : substituteApprover
-
-' Domain Relationships: CRM & Subscriptions
+' Domain: CRM & Subscriptions
 Customer "1" *-- "1..*" Contact : contacts
 Customer "1" *-- "0..*" Subscription : subscriptions
 Subscription "0..*" --> "1" BillingPlan : plan
-Subscription "1" *-- "0..*" CommercialException : exceptions
-Subscription "1" *-- "0..*" PriceReview : reviews
-Customer "1" *-- "0..*" CancellationRequest : cancellations
 
-' Domain Relationships: Invoicing & Financial Period
+' Domain: Invoicing & Periods
 Customer "1" --> "0..*" Invoice : invoices
+Subscription "0..1" --> "0..*" Invoice : generatedInvoices
 Invoice "1" *-- "1..*" InvoiceLine : lines
-Invoice "1" *-- "0..*" Comment : comments
 Invoice "0..*" --> "1" FinancialPeriod : period
-Comment "0..*" --> "1" User : author
-Comment "0..*" --> "0..*" User : mentions
 
-' Domain Relationships: Reconciliation
+' Domain: Reconciliation
 BankTransaction "1" -- "0..*" PaymentAllocation : allocations
 Invoice "1" -- "0..*" PaymentAllocation : payments
 
-' Domain Relationships: Notifications & Exports
+' Domain: Notifications
 Invoice "0..1" <-- "0..*" Notification : relatedInvoice
-Notification "0..*" --> "0..1" NotificationRule : appliedRule
-AccountingExportPackage "0..*" --> "1" FinancialPeriod : period
-AccountingExportPackage "0..*" --> "1" User : requestedBy
-ChangeHistoryRecord "0..*" --> "1" User : performedBy
+User "0..1" <-- "0..*" Notification : recipientUser
 
-' Realization of Ports by Adapters
+' Infrastructure -> Domain Ports
 BankingPaymentGateway <|.. BankingApiAdapter
 NotificationGateway <|.. SmtpNotificationAdapter
 BusinessCalendarService <|.. RegionalCalendarAdapter
-FileStorageGateway <|.. SecureCloudFileStorageAdapter
+
+' Layout: keep infrastructure below domain (4 stacked layers) and expand domain rightward
+Subscription -[hidden]right-> User
+InvoiceLine -[hidden]-> RegionalCalendarAdapter
+Notification -[hidden]-> SmtpNotificationAdapter
+PaymentAllocation -[hidden]-> BankingApiAdapter
 
 @enduml
